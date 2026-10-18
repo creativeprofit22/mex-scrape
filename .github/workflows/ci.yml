@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+
+      - name: Install project
+        run: uv sync --locked
+
+      # No test suite or build step exists yet; run the lint/format/typecheck
+      # tools configured in pyproject.toml ([tool.ruff], [tool.pyright]).
+      - name: Lint
+        run: uvx ruff@0.15.20 check .
+
+      - name: Format check
+        run: uvx ruff@0.15.20 format --check .
+
+      - name: Typecheck
+        run: uvx pyright@1.1.414
