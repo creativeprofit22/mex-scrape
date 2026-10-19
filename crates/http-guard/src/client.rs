@@ -286,6 +286,35 @@ impl GuardedRequest {
             .body(body))
     }
 
+    /// Sets an `application/x-www-form-urlencoded` body. Every
+    /// [`FormValue::Secret`] is added to this request's redactor, like
+    /// [`GuardedRequest::secret_header`].
+    ///
+    /// # Errors
+    ///
+    /// [`GuardError::InvalidUrl`] if the form cannot be encoded; the error
+    /// never contains a value.
+    pub fn form(self, fields: &[(&str, FormValue<'_>)]) -> Result<Self, GuardError> {
+        let pairs: Vec<(&str, &str)> = fields
+            .iter()
+            .map(|(name, value)| (*name, value.expose()))
+            .collect();
+        let body = serde_urlencoded::to_string(&pairs)
+            .map_err(|_| GuardError::InvalidUrl("form body could not be encoded".to_owned()))?;
+        let mut request = self;
+        for (_, value) in fields {
+            if let FormValue::Secret(secret) = value {
+                request = request.with_secret(secret);
+            }
+        }
+        Ok(request
+            .with(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/x-www-form-urlencoded"),
+            )
+            .body(body))
+    }
+
     /// Sets a raw body.
     #[must_use]
     pub fn body(self, body: impl Into<Vec<u8>>) -> Self {
@@ -335,6 +364,33 @@ fn header_name(name: &str) -> Result<HeaderName, GuardError> {
         });
     }
     Ok(parsed)
+}
+
+/// One value of a [`GuardedRequest::form`] body.
+#[derive(Clone, Copy)]
+pub enum FormValue<'a> {
+    /// A non-secret value.
+    Plain(&'a str),
+    /// A secret value, redacted from this request's errors.
+    Secret(&'a Secret),
+}
+
+impl FormValue<'_> {
+    fn expose(&self) -> &str {
+        match self {
+            Self::Plain(text) => text,
+            Self::Secret(secret) => secret.expose_secret(),
+        }
+    }
+}
+
+impl std::fmt::Debug for FormValue<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Plain(text) => f.debug_tuple("Plain").field(text).finish(),
+            Self::Secret(_) => f.write_str("Secret([redacted])"),
+        }
+    }
 }
 
 /// A response whose body can only be read through a byte cap.

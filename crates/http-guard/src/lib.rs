@@ -34,8 +34,8 @@ pub use websocket::test_support;
 pub use websocket::{GuardedWebSocket, GuardedWebSocketBuilder};
 
 pub use client::{
-    DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TOTAL_TIMEOUT, GuardedClient,
-    GuardedClientBuilder, GuardedRequest, GuardedResponse, SMALL_RESPONSE_BYTES,
+    DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TOTAL_TIMEOUT, FormValue,
+    GuardedClient, GuardedClientBuilder, GuardedRequest, GuardedResponse, SMALL_RESPONSE_BYTES,
 };
 pub use error::GuardError;
 pub use ip::{is_non_public_ip, is_non_public_ipv4, is_non_public_ipv6};

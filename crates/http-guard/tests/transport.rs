@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use http_guard::{
-    GuardError, GuardedClient, HostAllowlist, Redactor, Secret, TransportPolicy, Url,
+    FormValue, GuardError, GuardedClient, HostAllowlist, Redactor, Secret, TransportPolicy, Url,
 };
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::net::{TcpListener, TcpStream};
@@ -347,4 +347,59 @@ async fn transport_errors_are_redacted_and_truncated() {
         message.chars().count() <= http_guard::MAX_ERROR_MESSAGE_CHARS + 30,
         "{message}"
     );
+}
+
+#[tokio::test]
+async fn form_bodies_are_url_encoded_and_their_secrets_redacted() {
+    let echoed = format!("{{\"error\":\"bad token {FAKE_KEY}\"}}");
+    let (base, server) = serve_once(
+        format!(
+            "HTTP/1.1 400 Bad Request\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{echoed}",
+            echoed.len()
+        )
+        .into_bytes(),
+    )
+    .await;
+    let client = GuardedClient::builder(allowlist(&["fake.test"]))
+        .policy(TransportPolicy::LOOPBACK_TEST)
+        .build()
+        .unwrap();
+    let key = fake_key();
+    let response = client
+        .post(&url(&format!("{base}/auth/o2/token")))
+        .unwrap()
+        .form(&[
+            ("grant_type", FormValue::Plain("refresh_token")),
+            ("refresh_token", FormValue::Secret(&key)),
+            ("note", FormValue::Plain("a b&c=d")),
+        ])
+        .unwrap()
+        .send()
+        .await
+        .unwrap();
+    let message = response
+        .error_text(http_guard::SMALL_RESPONSE_BYTES)
+        .await
+        .unwrap();
+    assert!(!message.contains(FAKE_KEY), "{message}");
+    let request = server.await.unwrap();
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("content-type: application/x-www-form-urlencoded"),
+        "{request}"
+    );
+    assert!(
+        request.ends_with(
+            &[
+                "grant_type=refresh_token",
+                "&refresh_token=",
+                FAKE_KEY,
+                "&note=a+b%26c%3Dd"
+            ]
+            .concat()
+        ),
+        "{request}"
+    );
+    assert!(!format!("{:?}", FormValue::Secret(&key)).contains(FAKE_KEY));
 }

@@ -28,6 +28,7 @@ Secrets (defined in the [`secrets`](secrets.md) crate and re-exported here):
 - `GuardedRequest`:
   - `header(name, value)`: plain headers; refuses `Host`.
   - `secret_header(name, &Secret)`, `bearer(&Secret)`: values are marked sensitive and added to the request's redactor, so they are redacted from its errors even if the client's redactor lacks them.
+  - `form(&[(name, FormValue)])`: an `application/x-www-form-urlencoded` body (`serde_urlencoded`). `FormValue::Plain(&str)` or `FormValue::Secret(&Secret)`; secret values are added to the request's redactor and hidden from `Debug`. Used for OAuth token refreshes (Amazon LWA).
   - `json(&T)`, `body(bytes)`, `send().await`.
 - `GuardedResponse`: `status()`, `headers()`, the bounded readers `bytes(max)`, `text(max)` and `json::<T>(max)`, `error_text(max)` (bounded, redacted, truncated provider error body) and `sanitize(&str)`.
 - `HostAllowlist::new([...])`, `contains`, `iter` (sorted).
@@ -46,7 +47,7 @@ Secrets (defined in the [`secrets`](secrets.md) crate and re-exported here):
   - Bright Data: `api.brightdata.com`; Browser API WebSocket: `brd.superproxy.io`, port 9222 only.
   - SP-API: `sellingpartnerapi-na.amazon.com`, plus `api.amazon.com` for LWA tokens.
 - Give the client a `Redactor` over every secret it sends.
-- Send secrets only through `secret_header` or `bearer`, never in URLs.
+- Send secrets only through `secret_header`, `bearer` or a `FormValue::Secret` form field, never in URLs.
 - Read every body with an explicit cap: `SMALL_RESPONSE_BYTES` for tokens and error bodies, `DEFAULT_MAX_RESPONSE_BYTES` or smaller otherwise.
 - Turn non-2xx bodies into messages with `GuardedResponse::error_text(SMALL_RESPONSE_BYTES)`; any other provider text goes through `GuardedResponse::sanitize` or `GuardedClient::sanitize` before it reaches an error, log line or API response. Never format a raw `text()` body into an error.
 - Enable `test-support` only from `[dev-dependencies]`, to point tests at loopback fake servers.
@@ -58,7 +59,7 @@ TLS uses rustls with the platform verifier, so production images need the OS CA 
 ## Dependencies
 
 - Workspace: `secrets` (re-exported).
-- External: `reqwest` (rustls, http2; no default features), `tokio` (`net`), `serde`, `serde_json`, `thiserror`; for WebSockets `tokio-tungstenite` (`handshake` only), `tokio-rustls` (aws-lc-rs, TLS 1.2+1.3), `rustls-platform-verifier`, `futures-util` (`sink`) and `base64`.
+- External: `reqwest` (rustls, http2; no default features), `tokio` (`net`), `serde`, `serde_json`, `serde_urlencoded`, `thiserror`; for WebSockets `tokio-tungstenite` (`handshake` only), `tokio-rustls` (aws-lc-rs, TLS 1.2+1.3), `rustls-platform-verifier`, `futures-util` (`sink`) and `base64`.
 
 ## Owned tables
 
