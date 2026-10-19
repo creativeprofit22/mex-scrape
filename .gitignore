@@ -37,3 +37,6 @@ web/.next/
 Thumbs.db
 .vscode/
 .idea/
+
+# Agent plans and screenshots
+.gg/
