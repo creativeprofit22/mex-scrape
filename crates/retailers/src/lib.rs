@@ -5,12 +5,15 @@
 //! parses pages, preferring JSON-LD, then page JSON, then CSS selectors.
 //! Pages are fetched by the caller through `brightdata`; this crate does no
 //! I/O. The registry lists hosts and sample pages for the access check.
+//! [`RetailerOfferSource`] implements the `app::OfferSource` port over the
+//! adapters with an injected [`PageFetcher`].
 
 mod adapter;
 pub mod fixture;
 pub mod health;
 pub mod parse;
 mod registry;
+pub mod source;
 mod stores;
 
 pub use adapter::{
@@ -19,6 +22,7 @@ pub use adapter::{
 };
 pub use health::{HealthConfig, HealthConfigError, HealthStatus, ParseHealth, parse_page};
 pub use registry::{AccessMode, PageKind, RetailerInfo, all, hosts, retailer_for_host};
+pub use source::{FetchError, PageFetcher, RetailerOfferSource};
 
 /// Every store adapter, in registry order.
 #[must_use]

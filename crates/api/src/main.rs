@@ -1,6 +1,19 @@
 //! Runs the mex-scrape HTTP API on `API_ADDR` (default `127.0.0.1:8080`).
 
+use std::sync::Arc;
+
 use anyhow::Context as _;
+use app::AccessReport;
+use db::access::PgAccessCounts;
+use retailers::RetailerOfferSource;
+
+/// Composition root: the access report over Postgres and the retailer registry.
+fn access_report(pool: db::PgPool) -> AccessReport {
+    AccessReport::new(
+        Arc::new(PgAccessCounts(pool)),
+        Arc::new(RetailerOfferSource::lookup_only()),
+    )
+}
 
 /// Admin routes need `ADMIN_API_TOKEN` and `DATABASE_URL`; without both they
 /// answer 503. Errors name the variable only.
@@ -22,7 +35,7 @@ async fn admin_state() -> api::AdminState {
         }
     };
     match db::connect(&url).await {
-        Ok(pool) => api::AdminState::new(&token, std::sync::Arc::new(api::PgAccessSource(pool))),
+        Ok(pool) => api::AdminState::new(&token, Arc::new(access_report(pool))),
         Err(error) => {
             let detail = url.redactor().sanitize(&error.to_string());
             tracing::warn!(error = %detail, "database unavailable; admin API disabled");

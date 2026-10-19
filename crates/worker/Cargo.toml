@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 amazon.workspace = true
 anyhow.workspace = true
+app.workspace = true
 brightdata.workspace = true
 db.workspace = true
 domain.workspace = true

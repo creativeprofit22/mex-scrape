@@ -4,49 +4,23 @@
 //! without a database) every admin route answers 503, so the endpoint fails
 //! closed; a missing or wrong token answers 401.
 
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
+use app::{AccessReport, HostAccessReport};
 use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header::AUTHORIZATION};
-use db::PgPool;
-use db::brightdata_runs::{HostAccessCounts, access_counts_by_host};
 use serde::Serialize;
 use utoipa::ToSchema;
 
 /// Shortest `ADMIN_API_TOKEN` accepted; shorter values disable the endpoint.
 pub const MIN_TOKEN_LEN: usize = 16;
 
-/// Boxed future so the source can be a trait object.
-pub type CountsFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<Vec<HostAccessCounts>, ()>> + Send + 'a>>;
-
-/// Where per-host access counts come from; faked in tests.
-pub trait AccessSource: Send + Sync {
-    /// Outcome counts per host. The error carries no detail on purpose.
-    fn counts(&self) -> CountsFuture<'_>;
-}
-
-/// [`AccessSource`] over Postgres.
-pub struct PgAccessSource(pub PgPool);
-
-impl AccessSource for PgAccessSource {
-    fn counts(&self) -> CountsFuture<'_> {
-        Box::pin(async move {
-            access_counts_by_host(&self.0).await.map_err(|_| {
-                tracing::warn!("reading Bright Data access counts failed");
-            })
-        })
-    }
-}
-
 /// State of the admin routes. No `Debug`: it holds the token.
 #[derive(Clone)]
 pub struct AdminState {
     token: Option<Arc<str>>,
-    source: Option<Arc<dyn AccessSource>>,
+    report: Option<Arc<AccessReport>>,
 }
 
 impl AdminState {
@@ -55,20 +29,20 @@ impl AdminState {
     pub const fn disabled() -> Self {
         Self {
             token: None,
-            source: None,
+            report: None,
         }
     }
 
-    /// Enabled with `token` and `source`. A token shorter than
-    /// [`MIN_TOKEN_LEN`] bytes leaves the routes disabled.
+    /// Enabled with `token` and the access `report` use case. A token
+    /// shorter than [`MIN_TOKEN_LEN`] bytes leaves the routes disabled.
     #[must_use]
-    pub fn new(token: &str, source: Arc<dyn AccessSource>) -> Self {
+    pub fn new(token: &str, report: Arc<AccessReport>) -> Self {
         if token.len() < MIN_TOKEN_LEN {
             return Self::disabled();
         }
         Self {
             token: Some(Arc::from(token)),
-            source: Some(source),
+            report: Some(report),
         }
     }
 }
@@ -90,19 +64,17 @@ pub struct RetailerAccessCounts {
     pub failed: i64,
 }
 
-fn to_response(counts: Vec<HostAccessCounts>) -> Vec<RetailerAccessCounts> {
-    counts
-        .into_iter()
-        .map(|c| RetailerAccessCounts {
-            retailer: retailers::retailer_for_host(&c.host)
-                .map_or_else(|| c.host.clone(), |r| r.id.to_owned()),
-            host: c.host,
-            ok: c.ok,
-            blocked_needs_kyc: c.blocked_needs_kyc,
-            skipped_robots: c.skipped_robots,
-            failed: c.failed,
-        })
-        .collect()
+impl From<HostAccessReport> for RetailerAccessCounts {
+    fn from(row: HostAccessReport) -> Self {
+        Self {
+            retailer: row.retailer,
+            host: row.host,
+            ok: row.totals.ok,
+            blocked_needs_kyc: row.totals.blocked_needs_kyc,
+            skipped_robots: row.totals.skipped_robots,
+            failed: row.totals.failed,
+        }
+    }
 }
 
 /// Compares in time independent of where the bytes first differ.
@@ -139,17 +111,17 @@ pub(crate) async fn brightdata_access(
     State(state): State<AdminState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<RetailerAccessCounts>>, StatusCode> {
-    let (Some(token), Some(source)) = (&state.token, &state.source) else {
+    let (Some(token), Some(report)) = (&state.token, &state.report) else {
         return Err(StatusCode::SERVICE_UNAVAILABLE);
     };
     if !authorized(&headers, token) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let counts = source
-        .counts()
-        .await
-        .map_err(|()| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(to_response(counts)))
+    let rows = report.per_host().await.map_err(|_| {
+        tracing::warn!("reading Bright Data access counts failed");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(rows.into_iter().map(Into::into).collect()))
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@
 //! Owns every table in the database. Queries use runtime-checked
 //! `sqlx::query` calls so builds never need a live database.
 
+pub mod access;
 pub mod brightdata_runs;
 
 use std::ffi::OsString;

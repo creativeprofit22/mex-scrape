@@ -2,39 +2,46 @@
 
 use std::sync::Arc;
 
-use api::{AccessSource, AdminState, CountsFuture};
+use api::AdminState;
+use app::{AccessCountsRepo, AccessReport, AccessTotals, HostAccess, PortFuture, RepoError};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use db::brightdata_runs::HostAccessCounts;
 use http_body_util::BodyExt as _;
+use retailers::RetailerOfferSource;
 use tower::ServiceExt as _;
 
 const TOKEN: &str = "test-admin-token-0123456789";
 const PATH: &str = "/admin/brightdata/access";
 
-struct Fake(Result<Vec<HostAccessCounts>, ()>);
+struct Fake(Result<Vec<HostAccess>, RepoError>);
 
-impl AccessSource for Fake {
-    fn counts(&self) -> CountsFuture<'_> {
+impl AccessCountsRepo for Fake {
+    fn counts_by_host(&self) -> PortFuture<'_, Result<Vec<HostAccess>, RepoError>> {
         Box::pin(async move { self.0.clone() })
     }
 }
 
-fn counts() -> Vec<HostAccessCounts> {
+fn report(result: Result<Vec<HostAccess>, RepoError>) -> Arc<AccessReport> {
+    Arc::new(AccessReport::new(
+        Arc::new(Fake(result)),
+        Arc::new(RetailerOfferSource::lookup_only()),
+    ))
+}
+
+fn counts() -> Vec<HostAccess> {
     vec![
-        HostAccessCounts {
+        HostAccess {
             host: "www.liverpool.com.mx".to_owned(),
-            ok: 1,
-            blocked_needs_kyc: 2,
-            skipped_robots: 3,
-            failed: 4,
+            totals: AccessTotals {
+                ok: 1,
+                blocked_needs_kyc: 2,
+                skipped_robots: 3,
+                failed: 4,
+            },
         },
-        HostAccessCounts {
+        HostAccess {
             host: "other.example".to_owned(),
-            ok: 0,
-            blocked_needs_kyc: 0,
-            skipped_robots: 0,
-            failed: 0,
+            totals: AccessTotals::default(),
         },
     ]
 }
@@ -54,8 +61,8 @@ async fn call(state: AdminState, auth: Option<&str>) -> (StatusCode, Vec<u8>) {
     (status, body.to_vec())
 }
 
-fn enabled(result: Result<Vec<HostAccessCounts>, ()>) -> AdminState {
-    AdminState::new(TOKEN, Arc::new(Fake(result)))
+fn enabled(result: Result<Vec<HostAccess>, RepoError>) -> AdminState {
+    AdminState::new(TOKEN, report(result))
 }
 
 #[tokio::test]
@@ -63,7 +70,7 @@ async fn unconfigured_or_short_token_fails_closed_with_503() {
     let bearer = format!("Bearer {TOKEN}");
     let (status, _) = call(AdminState::disabled(), Some(&bearer)).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    let short = AdminState::new("short", Arc::new(Fake(Ok(vec![]))));
+    let short = AdminState::new("short", report(Ok(vec![])));
     let (status, _) = call(short, Some("Bearer short")).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
 }
@@ -97,7 +104,7 @@ async fn valid_token_returns_counts_per_retailer() {
 #[tokio::test]
 async fn storage_failure_is_500_without_detail() {
     let bearer = format!("Bearer {TOKEN}");
-    let (status, body) = call(enabled(Err(())), Some(&bearer)).await;
+    let (status, body) = call(enabled(Err(RepoError::Unavailable)), Some(&bearer)).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(body.is_empty());
 }

@@ -19,7 +19,31 @@ worker ──────────────▶ brightdata   (run store + r
 worker ─▶ amazon ─────────────────▶ http-guard ─▶ internet
 worker ─▶ http-guard                (Secret, Redactor: env secrets loaded at start-up)
 http-guard, db ─▶ secrets           (Secret, Redactor; db holds DATABASE_URL as a Secret)
+api, worker, db, retailers ─▶ app ─▶ domain   (use cases and ports, ADR 0009)
 ```
+
+## Layers
+
+The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-architecture.md)). Dependencies point inward only:
+
+```
+┌ entry points (composition roots): api, worker ────────────────────────┐
+│ ┌ infrastructure (adapters): db, retailers, amazon,                 ┐ │
+│ │                            http-guard, brightdata, secrets        │ │
+│ │ ┌ app: use cases + ports (OfferSource, AmazonSource,           ┐  │ │
+│ │ │      PriceHistoryRepo, AccessCountsRepo, Clock)              │  │ │
+│ │ │ ┌ domain: entities and pure rules ┐                          │  │ │
+│ │ │ └─────────────────────────────────┘                          │  │ │
+│ │ └──────────────────────────────────────────────────────────────┘  │ │
+│ └───────────────────────────────────────────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+- **domain**: entities and pure rules.
+- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `retailers::RetailerOfferSource`).
+- **infrastructure**: adapters for Postgres, store pages, Amazon, outbound HTTP, Bright Data and secrets.
+- **entry points**: `api` and `worker` build adapters, inject them into use cases, and map results to HTTP or logs.
+- `brightdata` stays product-agnostic, outside the onion ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); `worker` bridges it.
 
 ## Module map
 
@@ -30,6 +54,7 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 | `api` | bin + lib | axum HTTP server; publishes the OpenAPI spec (utoipa) | [api.md](modules/api.md) |
 | `worker` | bin | background job runner (fetching, matching, price history) | [worker.md](modules/worker.md) |
 | `domain` | lib | pure types and business logic, no I/O | [domain.md](modules/domain.md) |
+| `app` | lib | application layer: use cases and ports, no I/O ([ADR 0009](decisions/0009-onion-architecture.md)) | [app.md](modules/app.md) |
 | `db` | lib + bin `migrate` | sqlx Postgres access and migrations | [db.md](modules/db.md) |
 | `http-guard` | lib | hardened outbound HTTP and WebSocket ([ADR 0007](decisions/0007-brightdata-browser-api.md)) | [http-guard.md](modules/http-guard.md) |
 | `secrets` | lib | secret values and error redaction, no network code | [secrets.md](modules/secrets.md) |
@@ -46,19 +71,21 @@ Only the workspace dependencies listed here are allowed. `scripts/check_docs.py`
 | crate | may depend on |
 |---|---|
 | domain | — |
+| app | domain |
 | matching | domain |
 | secrets | — |
 | http-guard | secrets |
 | brightdata | http-guard |
-| amazon | domain, http-guard |
-| retailers | domain, brightdata |
-| db | domain, secrets |
-| api | domain, db, matching, retailers |
-| worker | domain, db, matching, retailers, amazon, brightdata, http-guard |
+| amazon | domain, app, http-guard |
+| retailers | domain, app, brightdata |
+| db | domain, app, secrets |
+| api | domain, app, db, matching, retailers |
+| worker | domain, app, db, matching, retailers, amazon, brightdata, http-guard |
 
 Rules:
 
 - `domain` depends on no other workspace crate and does no I/O.
+- `app` depends only on `domain` and non-I/O libraries: no infrastructure or entry-point crate, and no `sqlx`, `axum`, `hyper`, `tower`, `utoipa` or HTTP client crate. Its port signatures use only domain and app types; use cases receive ports as constructor arguments and never construct adapters ([ADR 0009](decisions/0009-onion-architecture.md)). `scripts/check_docs.py` enforces this.
 - `brightdata` depends on no mex-scrape domain crate, so other projects can adopt it ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); its run tables live in `db` and `worker` bridges them.
 - Adapters (`http-guard`, `brightdata`, `retailers`, `amazon`) never depend on `api`, `worker` or `db`.
 - Only `api` and `worker` are entry points; nothing depends on them.

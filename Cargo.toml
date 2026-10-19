@@ -12,6 +12,7 @@ publish = false
 [workspace.dependencies]
 # Workspace crates
 amazon = { path = "crates/amazon" }
+app = { path = "crates/app" }
 api = { path = "crates/api" }
 brightdata = { path = "crates/brightdata" }
 db = { path = "crates/db" }

@@ -1,6 +1,6 @@
 # 0001. Rust backend and Next.js web app
 
-- Status: Accepted
+- Status: Accepted (amended by [0009](0009-onion-architecture.md))
 - Date: 2026-10-18
 
 ## Context

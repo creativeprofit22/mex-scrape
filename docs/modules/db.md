@@ -19,11 +19,12 @@ Postgres access through sqlx, plus the schema migrations in `crates/db/migration
   - `load_run`, `active_runs`.
   - `insert_access_event` / `access_counts_by_host`: per-URL access outcomes (`ok`, `blocked_needs_kyc`, `skipped_robots`, `failed`) and their per-host totals.
   - `try_driver_lock`: session advisory lock on a dedicated connection (`DriverLock`); the worker holding it drives runs and runs start-up recovery.
+- `access::PgAccessCounts(PgPool)`: implements `app::AccessCountsRepo` over `access_counts_by_host`; errors become `app::RepoError::Unavailable` with no detail and no logging (callers log a fixed message).
 - Binary `migrate`: applies migrations to `DATABASE_URL` (`cargo run -p db --bin migrate`). Safe to run repeatedly. Errors are logged through the URL's redactor.
 
 ## Dependencies
 
-- Workspace: `domain`, `secrets` (`Secret`, `Redactor` for `DATABASE_URL`).
+- Workspace: `domain`, `app` (port traits it implements), `secrets` (`Secret`, `Redactor` for `DATABASE_URL`).
 - External: `sqlx` (Postgres, rustls), `thiserror`, `tokio`, `tracing`, `anyhow`.
 - Tests: `crates/db/tests/brightdata_runs.rs` needs Postgres, so it is ignored by default; run `cargo test -p db --test brightdata_runs -- --ignored` with `DATABASE_URL` set (CI runs it in the `migrations` job).
 

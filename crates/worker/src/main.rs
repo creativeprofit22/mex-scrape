@@ -9,14 +9,19 @@ mod brightdata_resume;
 mod brightdata_store;
 mod secrets;
 
+use std::sync::Arc;
+
 use anyhow::Context as _;
+use app::AccessReport;
 use brightdata::BrightDataClient;
 use brightdata::recovery::recover_interrupted;
 use brightdata::robots::{HttpRobotsSource, RobotsChecker};
 use brightdata::runs::{Caps, Runner, SystemClock, Timing};
 use db::DatabaseUrl;
+use db::access::PgAccessCounts;
 use db::brightdata_runs::DriverLock;
 use http_guard::Redactor;
+use retailers::RetailerOfferSource;
 
 use crate::brightdata_resume::{RefusingSink, client, resume_kept};
 use crate::brightdata_store::PgRunStore;
@@ -45,7 +50,8 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run(secrets: &ServerSecrets) -> anyhow::Result<()> {
     // Read now so a malformed value stops the worker before any job runs;
-    // the future store-fetch job owns a `ParseHealth` built from it.
+    // the future store-fetch job owns a `ParseHealth` built from it and
+    // passes it to `RetailerOfferSource::new`.
     let parse_health = parse_health_config().context("loading retailer parse health settings")?;
     tracing::info!(
         threshold = parse_health.threshold,
@@ -147,6 +153,10 @@ async fn recover_brightdata_runs(
         );
     }
     // Runs on every start-up that holds the driver lock, not just after a resume.
-    access_metrics::log_access_metrics(&metrics_pool).await;
+    let access_report = AccessReport::new(
+        Arc::new(PgAccessCounts(metrics_pool)),
+        Arc::new(RetailerOfferSource::lookup_only()),
+    );
+    access_metrics::log_access_metrics(&access_report).await;
     Ok(Some(lock))
 }

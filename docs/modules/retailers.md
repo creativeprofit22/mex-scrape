@@ -29,8 +29,13 @@ Store adapters for Mexican retailers. Each adapter builds a store's search and p
 - `adapters()`: every adapter in registry order. `adapter_for(id)` looks one up.
 - Registry: `RetailerInfo { id, name, hosts, samples, access: AccessMode, browser_pages, membership_required }`. `AccessMode { Unlocker, Browser }`. `RetailerInfo::access_for(PageKind)` returns `Browser` for the proven JavaScript-only page kinds. Also `PageKind { Search, Category, Product }` and `all()`, `hosts()`, `retailer_for_host(host)`. Edit `src/registry.rs` to change these.
 - `parse`: shared helpers. `jsonld` reads every `application/ld+json` block, including `@graph`, arrays, `Product`, `ItemList`, `Offer` and `AggregateOffer`. `embedded` reads `__NEXT_DATA__`, VTEX `__STATE__` and `<script id=…>` JSON. `vtex` handles the VTEX IO state and rendered blocks. `css` provides selector lists and `TileSpec` tiles. `price` parses MX price formats into integer centavos. `Draft` merges fields and validates them into an `Offer`: the URL must be on the retailer's hosts, an invalid GTIN is dropped, and `membership_required` comes from the registry.
+- `source`: `RetailerOfferSource` implements `app::OfferSource` over the adapters.
+  - `new(Arc<dyn PageFetcher>, Arc<dyn app::Clock>, Arc<std::sync::Mutex<ParseHealth>>)`: `search`/`product` look up `adapter_for`, build the URL, fetch it with `info().access_for(PageKind::Search|Product)`, stamp the `Page` with `clock.now()` and parse it through `health::parse_page` (`ParseKind::Search|Product`; `product` takes the first offer). Every parse is recorded in the caller-owned `ParseHealth`, so a drop below the threshold logs the alert. The lock is taken only after the fetch completes and never held across an `.await`; a poisoned lock is recovered with `into_inner` so tracking continues.
+  - `lookup_only()`: registry lookups only; `search`/`product` validate their input, then fail closed with `OfferSourceError::Unavailable`.
+  - Errors map to `OfferSourceError`: `AdapterError` to `InvalidQuery`/`InvalidSku`/`SearchUnavailable`, `FetchError { BlockedNeedsKyc, Failed }` to `BlockedNeedsKyc`/`FetchFailed`, any `ParseError` to `ParseFailed`.
+  - `PageFetcher::fetch(&TargetUrl, AccessMode) -> String` is injected by the caller, so this crate still does no I/O. Robots.txt and caps are the fetcher's job: the worker will inject a `brightdata::Runner`-backed fetcher (job-queue phase), so no Bright Data call bypasses `Runner`.
 - `fixture::sanitize(html)`: keeps the element tree with its text, JSON-LD, known page-data scripts (token-like JSON values redacted) and VTEX `__STATE__`. It drops comments, `<style>`, `<svg>`, `<iframe>`, `<noscript>`, other scripts, `<link>` except canonical, `on*`/`style`/`nonce`/`integrity`/`srcset` attributes, hidden input values and CSRF/token/nonce meta tags. Used by the worker's `capture_fixtures`.
-- `health`: `HealthConfig { threshold (0.8), min_samples (20), window (100) }`, read from `RETAILER_PARSE_ALERT_THRESHOLD` and `RETAILER_PARSE_ALERT_MIN_SAMPLES` via `HealthConfig::from_lookup`. `ParseHealth` keeps a rolling success window per retailer and is owned by the caller (no global state). `record(id, ok)` returns `HealthStatus::{Ok, Alert { rate }}`. `parse_page(adapter, kind, page, &mut health)` parses, records the result (a search page counts as a success only with at least one offer) and logs `tracing::warn!` with retailer, kind, rate and threshold once per drop below the threshold. It re-arms after recovery.
+- `health`: `HealthConfig { threshold (0.8), min_samples (20), window (100) }`, read from `RETAILER_PARSE_ALERT_THRESHOLD` and `RETAILER_PARSE_ALERT_MIN_SAMPLES` via `HealthConfig::from_lookup`. `ParseHealth` keeps a rolling success window per retailer and is owned by the caller (no global state). `record(id, ok)` returns `HealthStatus::{Ok, Alert { rate }, Low { rate }}` (`Alert` once per drop, `Low` while it stays below the threshold). `parse_page(adapter, kind, page, &mut health)` parses, records the result (a search page counts as a success only with at least one offer) and logs `tracing::warn!` with retailer, kind, rate and threshold once per drop below the threshold. It re-arms after recovery.
 
 ## Fixtures
 
@@ -38,8 +43,8 @@ Store adapters for Mexican retailers. Each adapter builds a store's search and p
 
 ## Dependencies
 
-- Workspace: `domain`, `brightdata` (`TargetUrl` only; no fetching).
-- External: `scraper`, `serde_json`, `thiserror`, `tracing`.
+- Workspace: `domain`, `app` (`OfferSource`, `Clock`, `PortFuture`), `brightdata` (`TargetUrl` only; no fetching).
+- External: `scraper`, `serde_json`, `thiserror`, `tracing`. Dev: `tokio` (async `source` tests).
 
 ## Owned tables
 
