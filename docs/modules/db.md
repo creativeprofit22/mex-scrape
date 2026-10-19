@@ -17,6 +17,7 @@ Postgres access through sqlx, plus the schema migrations in `crates/db/migration
   - `insert_run_capped`: one transaction that takes `pg_advisory_xact_lock(hashtext(tenant_id))`, re-checks runs/day, items/run and items/day, then inserts; the partial unique index maps to `InsertRunError::ActiveRun`.
   - `update_if_active`: changes a run only while it is `starting`/`running`/`ready`, so a terminal status is never overwritten.
   - `load_run`, `active_runs`.
+  - `insert_access_event` / `access_counts_by_host`: per-URL access outcomes (`ok`, `blocked_needs_kyc`, `skipped_robots`, `failed`) and their per-host totals.
   - `try_driver_lock`: session advisory lock on a dedicated connection (`DriverLock`); the worker holding it drives runs and runs start-up recovery.
 - Binary `migrate`: applies migrations to `DATABASE_URL` (`cargo run -p db --bin migrate`). Safe to run repeatedly. Errors are logged through the URL's redactor.
 
@@ -32,5 +33,6 @@ All tables. Currently:
 
 - `app_meta(key, value)`: baseline key/value metadata (migration `0001_init.sql`).
 - `safety_settings(id = 1, global_kill_switch, brightdata_enabled, updated_at)`: one row, seeded with both off, so the Bright Data connector starts disabled (migration `0002_brightdata_runs.sql`).
-- `brightdata_runs(id, tenant_id, job, mode, input_json, snapshot_id, status, requested_count, row_count, failed_count, error_message, created_at, updated_at)`: durable Bright Data runs (migration `0002_brightdata_runs.sql`). CHECKs: tenant/job `[A-Za-z0-9_.:-]{1,100}`, mode `unlocker|dataset`, status `starting|running|ready|imported|failed|cancelled`, snapshot id `[A-Za-z0-9_-]{1,200}`, counts ≥ 0, error ≤ 1000 characters, input ≤ 32 KiB. The partial unique index `brightdata_runs_one_active` allows one active run per (tenant, job); indexes on `(tenant_id, created_at)` and `status`.
+- `brightdata_runs(id, tenant_id, job, mode, input_json, snapshot_id, status, requested_count, row_count, failed_count, error_message, created_at, updated_at)`: durable Bright Data runs (migration `0002_brightdata_runs.sql`). CHECKs: tenant/job `[A-Za-z0-9_.:-]{1,100}`, mode `unlocker|dataset`, status `starting|running|ready|imported|failed|cancelled|blocked_needs_kyc` (the last added by `0003_blocked_needs_kyc.sql`), snapshot id `[A-Za-z0-9_-]{1,200}`, counts ≥ 0, error ≤ 1000 characters, input ≤ 32 KiB. The partial unique index `brightdata_runs_one_active` allows one active run per (tenant, job); indexes on `(tenant_id, created_at)` and `status`.
+- `brightdata_access_events(id, run_id, host, outcome, created_at)`: one row per URL attempt, host only (migration `0003_blocked_needs_kyc.sql`). `run_id` references `brightdata_runs` (cascade); outcome CHECK `ok|blocked_needs_kyc|skipped_robots|failed`; index on `(host, outcome)`.
 - `_sqlx_migrations`: sqlx migration history (managed by sqlx).

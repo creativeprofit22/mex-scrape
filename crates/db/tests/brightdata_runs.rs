@@ -341,3 +341,52 @@ async fn driver_lock_is_exclusive_until_released() {
     let again = brightdata_runs::try_driver_lock(&pool).await.unwrap();
     assert!(again.is_some());
 }
+
+#[tokio::test]
+#[ignore = "needs Postgres (DATABASE_URL)"]
+async fn access_events_count_by_host_and_status_widened() {
+    let pool = pool().await;
+    let tenant_id = tenant("access");
+    let now = now_ms();
+    let run = brightdata_runs::insert_run_capped(
+        &pool,
+        &new_run(&tenant_id, "j", 1, now),
+        day_start(now),
+        &CAPS,
+    )
+    .await
+    .unwrap();
+    let host = format!("{tenant_id}.example");
+    for outcome in [
+        "ok",
+        "blocked_needs_kyc",
+        "blocked_needs_kyc",
+        "skipped_robots",
+    ] {
+        brightdata_runs::insert_access_event(&pool, run, &host, outcome)
+            .await
+            .unwrap();
+    }
+    assert!(
+        brightdata_runs::insert_access_event(&pool, run, &host, "bogus")
+            .await
+            .is_err()
+    );
+    let counts = brightdata_runs::access_counts_by_host(&pool).await.unwrap();
+    let mine = counts.iter().find(|c| c.host == host).unwrap();
+    assert_eq!(
+        (
+            mine.ok,
+            mine.blocked_needs_kyc,
+            mine.skipped_robots,
+            mine.failed
+        ),
+        (1, 2, 1, 0)
+    );
+    let widened =
+        sqlx::query("UPDATE brightdata_runs SET status = 'blocked_needs_kyc' WHERE id = $1")
+            .bind(run)
+            .execute(&pool)
+            .await;
+    assert!(widened.is_ok());
+}

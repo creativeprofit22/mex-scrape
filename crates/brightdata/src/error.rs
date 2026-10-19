@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use http_guard::{GuardError, StatusCode, truncate_error_message};
 
+use crate::refusal::RefusalReason;
+
 /// A failed Bright Data call. Messages are redacted (API key, zone name),
 /// URL-free and bounded, so they are safe to log, store on a run or return.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -15,6 +17,17 @@ pub enum BrightDataError {
     /// Rate limit, server or network trouble; the call may succeed later.
     #[error("{0}")]
     Transient(String),
+    /// Bright Data refused the target until KYC is approved (robots.txt
+    /// disallow, compliance policy or a Browser API `brob` error). Never
+    /// retried: repeating the call cannot succeed and may cost money.
+    /// `reason` tells robots.txt refusals apart from policy refusals.
+    #[error("{message}")]
+    BlockedNeedsKyc {
+        /// Which kind of refusal Bright Data returned.
+        reason: RefusalReason,
+        /// Redacted, URL-free, bounded message.
+        message: String,
+    },
 }
 
 impl BrightDataError {
@@ -24,11 +37,28 @@ impl BrightDataError {
         matches!(self, Self::Transient(_))
     }
 
+    /// True for [`BrightDataError::BlockedNeedsKyc`].
+    #[must_use]
+    pub fn is_blocked_needs_kyc(&self) -> bool {
+        matches!(self, Self::BlockedNeedsKyc { .. })
+    }
+
+    /// The refusal reason for [`BrightDataError::BlockedNeedsKyc`].
+    #[must_use]
+    pub fn refusal_reason(&self) -> Option<RefusalReason> {
+        match self {
+            Self::BlockedNeedsKyc { reason, .. } => Some(*reason),
+            Self::Terminal(_) | Self::Transient(_) => None,
+        }
+    }
+
     /// The (already redacted) message.
     #[must_use]
     pub fn message(&self) -> &str {
         match self {
-            Self::Terminal(message) | Self::Transient(message) => message,
+            Self::Terminal(message)
+            | Self::Transient(message)
+            | Self::BlockedNeedsKyc { message, .. } => message,
         }
     }
 }
@@ -57,6 +87,25 @@ impl Failure {
     pub(crate) fn terminal(message: impl Into<String>) -> Self {
         Self {
             error: BrightDataError::Terminal(message.into()),
+            retry_after: None,
+            not_accepted: false,
+        }
+    }
+
+    /// A KYC-gated refusal; never retried.
+    pub(crate) fn blocked(reason: RefusalReason, status: StatusCode, code: &str) -> Self {
+        let code = if code.is_empty() {
+            String::new()
+        } else {
+            format!(" ({code})")
+        };
+        let message = truncate_error_message(&format!(
+            "Bright Data blocked this target until KYC is approved: {}{code} [HTTP {}]",
+            reason.describe(),
+            status.as_u16()
+        ));
+        Self {
+            error: BrightDataError::BlockedNeedsKyc { reason, message },
             retry_after: None,
             not_accepted: false,
         }

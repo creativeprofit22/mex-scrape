@@ -16,6 +16,7 @@ use tokio::time::Instant;
 use crate::client::{DatasetTrigger, Download, SnapshotStatus, UnlockRequest, UnlockedPage};
 use crate::error::BrightDataError;
 use crate::ids::{CountryCode, SnapshotId, TargetUrl};
+use crate::robots::{Access, RobotsChecker};
 use crate::transport::Transport;
 
 /// Longest error message stored on a run (characters).
@@ -35,6 +36,9 @@ pub const COLLECTION_FAILED: &str = "Bright Data reported the collection failed"
 pub const COLLECTION_CANCELLED: &str = "Bright Data cancelled the collection";
 /// Stored when the poll budget runs out; the run stays resumable.
 pub const POLL_BUDGET_EXHAUSTED: &str = "Bright Data is still collecting; resume the run later";
+/// Stored message for a URL our robots.txt pre-check skipped.
+pub const ROBOTS_SKIPPED: &str = "Skipped: disallowed by robots.txt (needs KYC)";
+
 /// Stored when every page of a Web Unlocker run failed without a message.
 pub const NO_PAGE_FETCHED: &str = "No page could be fetched";
 
@@ -146,17 +150,21 @@ pub enum RunStatus {
     Failed,
     /// Stopped by request, by the kill switch, or by Bright Data.
     Cancelled,
+    /// Finished with no page: every target was refused until KYC is
+    /// approved (robots.txt or compliance policy).
+    BlockedNeedsKyc,
 }
 
 impl RunStatus {
     /// Every status, in lifecycle order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Starting,
         Self::Running,
         Self::Ready,
         Self::Imported,
         Self::Failed,
         Self::Cancelled,
+        Self::BlockedNeedsKyc,
     ];
 
     /// Stored text.
@@ -169,6 +177,7 @@ impl RunStatus {
             Self::Imported => "imported",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
+            Self::BlockedNeedsKyc => "blocked_needs_kyc",
         }
     }
 
@@ -485,6 +494,63 @@ pub trait RunStore: Send + Sync {
 
     /// The global kill switch (missing settings ⇒ on).
     fn kill_switch_on(&self) -> impl Future<Output = Result<bool, StoreError>> + Send;
+
+    /// Records the outcome of one URL of a run, for per-host metrics. Only
+    /// the host is stored, never the URL.
+    fn record_access(
+        &self,
+        run: RunId,
+        host: &str,
+        outcome: AccessOutcome,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+}
+
+/// How an unlocker run fetches its pages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PageAccess {
+    /// Web Unlocker (`POST /request`), the default.
+    #[default]
+    Unlocker,
+    /// Browser API (remote Chrome over CDP), only for targets proven to need
+    /// JavaScript (ADR 0007).
+    Browser,
+}
+
+impl PageAccess {
+    /// Stored text.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unlocker => "unlocker",
+            Self::Browser => "browser",
+        }
+    }
+}
+
+/// What happened to one URL of an unlocker run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AccessOutcome {
+    /// Page fetched and accepted.
+    Ok,
+    /// Bright Data refused it until KYC (policy or robots.txt).
+    BlockedNeedsKyc,
+    /// Our robots.txt pre-check skipped it; no request was made.
+    SkippedRobots,
+    /// Any other failure.
+    Failed,
+}
+
+impl AccessOutcome {
+    /// Stored text.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::BlockedNeedsKyc => "blocked_needs_kyc",
+            Self::SkippedRobots => "skipped_robots",
+            Self::Failed => "failed",
+        }
+    }
 }
 
 /// Where run results go. Implemented by callers (store adapters, the
@@ -569,11 +635,15 @@ pub struct Runner<'a, T, S, C> {
     pub timing: Timing,
     /// Per-tenant caps.
     pub caps: Caps,
+    /// robots.txt pre-check; `None` skips it.
+    pub robots: Option<&'a RobotsChecker>,
 }
 
 impl<'a, T: Transport, S: RunStore, C: Clock> Runner<'a, T, S, C> {
-    /// Fetches `urls` with Web Unlocker as one run and hands each page to
-    /// `sink`. Ends `imported` if any page was accepted, else `failed`.
+    /// Fetches `urls` with Web Unlocker (or the Browser API, per `access`)
+    /// as one run and hands each page to `sink`. Gates, caps, the robots.txt
+    /// pre-check and access events apply to both. Ends `imported` if any
+    /// page was accepted, else `failed`.
     ///
     /// # Errors
     ///
@@ -585,6 +655,7 @@ impl<'a, T: Transport, S: RunStore, C: Clock> Runner<'a, T, S, C> {
         scope: &RunScope,
         urls: &[TargetUrl],
         country: Option<CountryCode>,
+        access: PageAccess,
         sink: &impl RunSink,
     ) -> Result<RunOutcome, RunError> {
         if urls.is_empty() {
@@ -594,6 +665,7 @@ impl<'a, T: Transport, S: RunStore, C: Clock> Runner<'a, T, S, C> {
         let input = json!({
             "urls": urls.iter().map(TargetUrl::as_str).collect::<Vec<_>>(),
             "country": country.as_ref().map(CountryCode::as_str),
+            "access": access.as_str(),
         });
         let input_json = bounded_input(&input)?;
         let transport = self.gate(scope, requested).await?;
@@ -606,25 +678,50 @@ impl<'a, T: Transport, S: RunStore, C: Clock> Runner<'a, T, S, C> {
         {
             return self.outcome(id).await;
         }
-        let (mut rows, mut failed) = (0_u32, 0_u32);
+        let (mut rows, mut failed, mut blocked) = (0_u32, 0_u32, 0_u32);
         let mut first_error: Option<String> = None;
+        let mut first_block: Option<String> = None;
         for url in urls {
             if self.stop_requested(id, transport, None).await? {
                 return self.outcome(id).await;
             }
-            let request = UnlockRequest {
-                url: url.clone(),
-                country,
+            let (result, outcome) = if self.robots_disallows(url).await {
+                (Err(ROBOTS_SKIPPED.to_owned()), AccessOutcome::SkippedRobots)
+            } else {
+                let request = UnlockRequest {
+                    url: url.clone(),
+                    country,
+                };
+                let fetched = match access {
+                    PageAccess::Unlocker => transport.unlock(&request).await,
+                    PageAccess::Browser => transport.browse(&request).await,
+                };
+                match fetched {
+                    Ok(page) => match sink.accept_page(url, page).await {
+                        Ok(()) => (Ok(()), AccessOutcome::Ok),
+                        Err(message) => (Err(message), AccessOutcome::Failed),
+                    },
+                    Err(error) if error.is_blocked_needs_kyc() => (
+                        Err(error.message().to_owned()),
+                        AccessOutcome::BlockedNeedsKyc,
+                    ),
+                    Err(error) => (Err(error.message().to_owned()), AccessOutcome::Failed),
+                }
             };
-            let result = match transport.unlock(&request).await {
-                Ok(page) => sink.accept_page(url, page).await,
-                Err(error) => Err(error.message().to_owned()),
-            };
+            self.store.record_access(id, &url.host(), outcome).await?;
             match result {
                 Ok(()) => rows += 1,
                 Err(message) => {
                     failed += 1;
-                    first_error.get_or_insert(message);
+                    if matches!(
+                        outcome,
+                        AccessOutcome::BlockedNeedsKyc | AccessOutcome::SkippedRobots
+                    ) {
+                        blocked += 1;
+                        first_block.get_or_insert(message);
+                    } else {
+                        first_error.get_or_insert(message);
+                    }
                 }
             }
             let counts = RunUpdate {
@@ -636,8 +733,11 @@ impl<'a, T: Transport, S: RunStore, C: Clock> Runner<'a, T, S, C> {
                 return self.outcome(id).await;
             }
         }
-        let message = first_error.unwrap_or_default();
-        let last = if rows == 0 {
+        let all_blocked = blocked > 0 && blocked == failed;
+        let message = first_error.or(first_block).unwrap_or_default();
+        let last = if rows == 0 && all_blocked {
+            RunUpdate::status(RunStatus::BlockedNeedsKyc).message(&message)
+        } else if rows == 0 {
             let message = if message.is_empty() {
                 NO_PAGE_FETCHED
             } else {
@@ -649,6 +749,14 @@ impl<'a, T: Transport, S: RunStore, C: Clock> Runner<'a, T, S, C> {
         };
         self.update(id, last).await?;
         self.outcome(id).await
+    }
+
+    /// True when robots.txt disallows `url` (never without a checker).
+    async fn robots_disallows(&self, url: &TargetUrl) -> bool {
+        match self.robots {
+            Some(robots) => robots.check(url).await == Access::Disallowed,
+            None => false,
+        }
     }
 
     /// Triggers a Datasets v3 collection as one run and drives it until it

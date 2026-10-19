@@ -29,15 +29,17 @@ impl RunSink for RefusingSink {
 }
 
 /// Builds the live client, or `None` when a credential is missing (runs
-/// then fail the key gate, closed). Logs name settings only; client errors
-/// pass through `redactor`.
+/// then fail the key gate, closed). `browser_zone` is optional: without it
+/// Browser API fetches fail terminally. Logs name settings only; client
+/// errors pass through `redactor`.
 pub(crate) fn client(
     api_key: Option<Secret>,
     unlocker_zone: Option<Secret>,
+    browser_zone: Option<Secret>,
     redactor: &Redactor,
 ) -> Option<BrightDataClient> {
     let config = match BrightDataConfig::from_secrets(api_key, unlocker_zone) {
-        Ok(config) => config,
+        Ok(config) => config.with_browser_zone(browser_zone),
         Err(error @ ConfigError::MissingApiKey) => {
             tracing::info!(error = %error, "Bright Data client not configured");
             return None;
@@ -109,8 +111,8 @@ pub(crate) async fn resume_kept<T: Transport, S: RunStore, C: Clock>(
 mod tests {
     use super::{NO_IMPORTER, RefusingSink, ResumeReport, client, resume_kept};
     use brightdata::runs::{
-        Caps, Clock, GateError, GateState, NewRun, RunError, RunId, RunMode, RunRecord, RunScope,
-        RunSink, RunStatus, RunStore, RunUpdate, Runner, StoreError, Timing,
+        AccessOutcome, Caps, Clock, GateError, GateState, NewRun, RunError, RunId, RunMode,
+        RunRecord, RunScope, RunSink, RunStatus, RunStore, RunUpdate, Runner, StoreError, Timing,
     };
     use brightdata::{BrightDataClient, TargetUrl, UnlockedPage};
     use http_guard::{Redactor, Secret};
@@ -178,6 +180,14 @@ mod tests {
         async fn kill_switch_on(&self) -> Result<bool, StoreError> {
             Ok(false)
         }
+        async fn record_access(
+            &self,
+            _: RunId,
+            _: &str,
+            _: AccessOutcome,
+        ) -> Result<(), StoreError> {
+            Ok(())
+        }
     }
 
     fn secret(value: &str) -> Option<Secret> {
@@ -187,10 +197,11 @@ mod tests {
     #[test]
     fn client_needs_key_and_zone() {
         let redactor = Redactor::default();
-        assert!(client(None, None, &redactor).is_none());
-        assert!(client(None, secret("zone"), &redactor).is_none());
-        assert!(client(secret("key"), None, &redactor).is_none());
-        assert!(client(secret("key"), secret("zone"), &redactor).is_some());
+        assert!(client(None, None, None, &redactor).is_none());
+        assert!(client(None, secret("zone"), None, &redactor).is_none());
+        assert!(client(secret("key"), None, secret("browser"), &redactor).is_none());
+        assert!(client(secret("key"), secret("zone"), None, &redactor).is_some());
+        assert!(client(secret("key"), secret("zone"), secret("browser"), &redactor).is_some());
     }
 
     #[tokio::test]
@@ -219,6 +230,7 @@ mod tests {
             clock: &FixedClock,
             timing: Timing::default(),
             caps: Caps::default(),
+            robots: None,
         };
         assert_eq!(
             runner.resume_run(RunId(7), &RefusingSink).await,

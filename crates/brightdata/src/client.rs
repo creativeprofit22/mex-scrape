@@ -1,6 +1,9 @@
 //! The live client: Web Unlocker `POST /request` and Datasets v3 trigger,
 //! progress, snapshot download and cancel (ported from linkgo
-//! `brightdata/direct.rs`, async, over `http-guard`).
+//! `brightdata/direct.rs`, async, over `http-guard`), plus the Browser API
+//! ([`browser`]).
+
+use std::time::Duration;
 
 use http_guard::{
     DEFAULT_MAX_RESPONSE_BYTES, GuardError, GuardedClient, GuardedRequest, GuardedResponse,
@@ -10,10 +13,11 @@ use http_guard::{
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::config::BrightDataConfig;
+use crate::config::{BrightDataConfig, BrowserSettle};
 use crate::error::{BrightDataError, Failure};
 use crate::ids::{CountryCode, DatasetId, DiscoverBy, SnapshotId, TargetUrl};
 use crate::rate::{RateKey, ZoneLimiter};
+use crate::refusal::classify_unlocker;
 use crate::retry::{Idempotency, RetryPolicy, parse_retry_after, with_retry};
 use crate::transport::Transport;
 
@@ -29,6 +33,8 @@ const PAGE_RESPONSE_BYTES: u64 = DEFAULT_MAX_RESPONSE_BYTES;
 const SNAPSHOT_RESPONSE_BYTES: u64 = DEFAULT_MAX_RESPONSE_BYTES;
 /// Bright Data's error-reason response header.
 const BRD_ERROR_HEADER: &str = "x-brd-error";
+/// Bright Data's machine-readable error code header.
+const BRD_ERROR_CODE_HEADER: &str = "x-brd-error-code";
 
 /// One Web Unlocker fetch.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +128,12 @@ pub struct BrightDataClient {
     base: Url,
     api_key: Secret,
     zone: Secret,
+    browser_zone: Option<Secret>,
+    browser_endpoint: Url,
+    browser_policy: TransportPolicy,
+    browser_timeout: Duration,
+    browser_settle: BrowserSettle,
+    browser_block_downloads: bool,
     retry: RetryPolicy,
     limiter: ZoneLimiter,
 }
@@ -135,22 +147,35 @@ impl BrightDataClient {
     pub fn new(config: BrightDataConfig) -> Result<Self, BrightDataError> {
         let base = Url::parse(BRIGHTDATA_API_BASE)
             .map_err(|_| BrightDataError::Terminal("invalid Bright Data base URL".to_owned()))?;
-        Self::build(config, base, TransportPolicy::PUBLIC_HTTPS)
+        let browser = Url::parse(browser::BRIGHTDATA_BROWSER_ENDPOINT)
+            .map_err(|_| BrightDataError::Terminal("invalid Browser API endpoint".to_owned()))?;
+        Self::build(config, base, browser, TransportPolicy::PUBLIC_HTTPS)
     }
 
     /// A client for a loopback fake server.
     #[cfg(test)]
     pub(crate) fn for_test(base: &str, config: BrightDataConfig) -> Self {
+        Self::for_test_browser(base, "ws://127.0.0.1:9", config)
+    }
+
+    /// A client whose API and Browser API endpoints are loopback fakes.
+    #[cfg(test)]
+    pub(crate) fn for_test_browser(base: &str, browser: &str, config: BrightDataConfig) -> Self {
         let base = Url::parse(base).expect("test base URL");
-        Self::build(config, base, TransportPolicy::LOOPBACK_TEST).expect("test client")
+        let browser = Url::parse(browser).expect("test browser URL");
+        Self::build(config, base, browser, TransportPolicy::LOOPBACK_TEST).expect("test client")
     }
 
     fn build(
         config: BrightDataConfig,
         base: Url,
+        browser_endpoint: Url,
         policy: TransportPolicy,
     ) -> Result<Self, BrightDataError> {
-        let redactor = Redactor::new([&config.api_key, &config.unlocker_zone]);
+        let mut redactor = Redactor::new([&config.api_key, &config.unlocker_zone]);
+        if let Some(zone) = &config.browser_zone {
+            redactor = redactor.with(zone);
+        }
         let client = |timeout| {
             let allowlist = HostAllowlist::new([BRIGHTDATA_API_HOST])?;
             GuardedClient::builder(allowlist)
@@ -168,6 +193,12 @@ impl BrightDataClient {
             base,
             api_key: config.api_key,
             zone: config.unlocker_zone,
+            browser_zone: config.browser_zone,
+            browser_endpoint,
+            browser_policy: policy,
+            browser_timeout: config.browser_timeout,
+            browser_settle: config.browser_settle,
+            browser_block_downloads: config.browser_block_downloads,
             retry: config.retry,
             limiter: ZoneLimiter::new(config.rate),
         })
@@ -210,6 +241,17 @@ impl BrightDataClient {
         let retry_after = header_text(header::RETRY_AFTER.as_str())
             .as_deref()
             .and_then(parse_retry_after);
+        let error_code = header_text(BRD_ERROR_CODE_HEADER)
+            .map(|value| response.sanitize(value.trim()))
+            .unwrap_or_default();
+        if let Some(reason) = classify_unlocker(status.as_u16(), &error_code) {
+            let code: String = error_code
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .take(64)
+                .collect();
+            return Failure::blocked(reason, status, &code);
+        }
         let brd_error = header_text(BRD_ERROR_HEADER)
             .map(|value| response.sanitize(value.trim()))
             .filter(|value| !value.is_empty());
@@ -342,6 +384,15 @@ impl Transport for BrightDataClient {
         .await
     }
 
+    async fn browse(&self, request: &UnlockRequest) -> Result<UnlockedPage, BrightDataError> {
+        // A refused or failed session is not billed as a page; transient
+        // failures are retried like Unlocker fetches.
+        with_retry(&self.retry, Idempotency::Safe, move || {
+            self.browse_once(request)
+        })
+        .await
+    }
+
     async fn trigger(&self, trigger: &DatasetTrigger) -> Result<SnapshotId, BrightDataError> {
         trigger.validate()?;
         // Starts a paid collection: never repeated after a possible accept.
@@ -394,5 +445,6 @@ fn error_detail(body: &str) -> String {
     }
 }
 
+pub(crate) mod browser;
 #[cfg(test)]
 mod tests;

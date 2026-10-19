@@ -8,14 +8,15 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::{
-    COLLECTION_FAILED, Caps, Clock, GateError, GateState, KILL_SWITCH_STOP, MAX_RUN_ERROR_CHARS,
-    NO_PAGE_FETCHED, NewRun, POLL_BUDGET_EXHAUSTED, RunError, RunId, RunMode, RunRecord, RunScope,
-    RunSink, RunStatus, RunStore, RunUpdate, Runner, StoreError, Timing, bound_error, check_gates,
-    day_start_ms,
+    AccessOutcome, COLLECTION_FAILED, Caps, Clock, GateError, GateState, KILL_SWITCH_STOP,
+    MAX_RUN_ERROR_CHARS, NO_PAGE_FETCHED, NewRun, POLL_BUDGET_EXHAUSTED, PageAccess, RunError,
+    RunId, RunMode, RunRecord, RunScope, RunSink, RunStatus, RunStore, RunUpdate, Runner,
+    StoreError, Timing, bound_error, check_gates, day_start_ms,
 };
 use crate::client::{DatasetTrigger, Download, SnapshotStatus, UnlockRequest, UnlockedPage};
 use crate::error::BrightDataError;
 use crate::ids::{DatasetId, DiscoverBy, SnapshotId, TargetUrl};
+use crate::refusal::RefusalReason;
 use crate::transport::Transport;
 
 const NOW: i64 = 1_790_000_000_000;
@@ -39,6 +40,7 @@ struct State {
     next_id: i64,
     kill_switch: bool,
     enabled: bool,
+    access: Vec<(i64, String, AccessOutcome)>,
 }
 
 impl State {
@@ -234,6 +236,20 @@ impl RunStore for MemoryStore {
     async fn kill_switch_on(&self) -> Result<bool, StoreError> {
         Ok(self.state.lock().unwrap().kill_switch)
     }
+
+    async fn record_access(
+        &self,
+        run: RunId,
+        host: &str,
+        outcome: AccessOutcome,
+    ) -> Result<(), StoreError> {
+        self.state
+            .lock()
+            .unwrap()
+            .access
+            .push((run.0, host.to_owned(), outcome));
+        Ok(())
+    }
 }
 
 type Hook = Box<dyn FnOnce() + Send>;
@@ -276,6 +292,11 @@ impl Transport for FakeTransport {
     async fn unlock(&self, _request: &UnlockRequest) -> Result<UnlockedPage, BrightDataError> {
         self.record("unlock");
         pop(&self.unlock, "unlock")
+    }
+
+    async fn browse(&self, _request: &UnlockRequest) -> Result<UnlockedPage, BrightDataError> {
+        self.record("browse");
+        pop(&self.unlock, "browse")
     }
 
     async fn trigger(&self, _trigger: &DatasetTrigger) -> Result<SnapshotId, BrightDataError> {
@@ -347,6 +368,7 @@ fn runner<'a>(
             poll_budget: Duration::from_secs(60),
         },
         caps: Caps::default(),
+        robots: None,
     }
 }
 
@@ -675,7 +697,13 @@ async fn unlocker_run_counts_partial_failures() {
         ..MemorySink::default()
     };
     let outcome = runner(&transport, &store, &clock)
-        .start_unlocker_run(&scope("liverpool"), &urls(&["a", "b", "bad"]), None, &sink)
+        .start_unlocker_run(
+            &scope("liverpool"),
+            &urls(&["a", "b", "bad"]),
+            None,
+            PageAccess::Unlocker,
+            &sink,
+        )
         .await
         .unwrap();
     assert_eq!(outcome.status, RunStatus::Imported);
@@ -698,7 +726,13 @@ async fn unlocker_run_with_no_page_fails() {
         ..MemorySink::default()
     };
     let outcome = runner(&transport, &store, &clock)
-        .start_unlocker_run(&scope("liverpool"), &urls(&["x"]), None, &sink)
+        .start_unlocker_run(
+            &scope("liverpool"),
+            &urls(&["x"]),
+            None,
+            PageAccess::Unlocker,
+            &sink,
+        )
         .await
         .unwrap();
     assert_eq!(outcome.status, RunStatus::Failed);
@@ -730,6 +764,7 @@ async fn unlocker_run_stops_on_the_kill_switch() {
             &scope("liverpool"),
             &urls(&["a", "b"]),
             None,
+            PageAccess::Unlocker,
             &FlipSink(Arc::clone(&store)),
         )
         .await
@@ -749,7 +784,7 @@ async fn gates_block_runs_before_any_call_or_row() {
     let store = MemoryStore::enabled();
     store.set_kill_switch(true);
     let result = runner(&transport, &store, &clock)
-        .start_unlocker_run(&scope("j"), &one, None, &sink)
+        .start_unlocker_run(&scope("j"), &one, None, PageAccess::Unlocker, &sink)
         .await;
     assert_eq!(result, Err(RunError::Gate(GateError::KillSwitch)));
 
@@ -765,20 +800,20 @@ async fn gates_block_runs_before_any_call_or_row() {
         ..runner(&transport, &store, &clock)
     };
     let result = no_key
-        .start_unlocker_run(&scope("j"), &one, None, &sink)
+        .start_unlocker_run(&scope("j"), &one, None, PageAccess::Unlocker, &sink)
         .await;
     assert_eq!(result, Err(RunError::Gate(GateError::MissingKey)));
 
     let many: Vec<String> = (0..51).map(|n| n.to_string()).collect();
     let many: Vec<&str> = many.iter().map(String::as_str).collect();
     let result = runner(&transport, &store, &clock)
-        .start_unlocker_run(&scope("j"), &urls(&many), None, &sink)
+        .start_unlocker_run(&scope("j"), &urls(&many), None, PageAccess::Unlocker, &sink)
         .await;
     assert_eq!(result, Err(RunError::Gate(GateError::ItemsPerRunCap)));
 
     store.seed(&scope("j"), RunMode::Dataset, None, RunStatus::Running, NOW);
     let result = runner(&transport, &store, &clock)
-        .start_unlocker_run(&scope("j"), &one, None, &sink)
+        .start_unlocker_run(&scope("j"), &one, None, PageAccess::Unlocker, &sink)
         .await;
     assert_eq!(result, Err(RunError::Gate(GateError::ActiveRun)));
     assert_eq!(store.count(), 1);
@@ -794,14 +829,14 @@ async fn gates_block_runs_before_any_call_or_row() {
         );
     }
     let result = runner(&transport, &capped, &clock)
-        .start_unlocker_run(&scope("j"), &one, None, &sink)
+        .start_unlocker_run(&scope("j"), &one, None, PageAccess::Unlocker, &sink)
         .await;
     assert_eq!(result, Err(RunError::Gate(GateError::RunsPerDayCap)));
     // Yesterday's runs do not count.
     let tomorrow = FixedClock(NOW + 86_400_000);
     transport.unlock.lock().unwrap().push_back(Ok(page()));
     let outcome = runner(&transport, &capped, &tomorrow)
-        .start_unlocker_run(&scope("j"), &one, None, &sink)
+        .start_unlocker_run(&scope("j"), &one, None, PageAccess::Unlocker, &sink)
         .await
         .unwrap();
     assert_eq!(outcome.status, RunStatus::Imported);
@@ -932,4 +967,130 @@ async fn resume_rejects_unresumable_runs() {
         Err(RunError::Gate(GateError::KillSwitch))
     );
     assert!(transport.calls().is_empty());
+}
+
+struct FakeRobots(&'static str);
+
+impl crate::robots::RobotsSource for FakeRobots {
+    fn fetch<'a>(&'a self, _host: &'a str) -> crate::robots::FetchFuture<'a> {
+        Box::pin(async move { crate::robots::Fetched::Body(self.0.to_owned()) })
+    }
+}
+
+fn checker(robots: &'static str) -> crate::robots::RobotsChecker {
+    crate::robots::RobotsChecker::new(Box::new(FakeRobots(robots)), Box::new(FixedClock(NOW)))
+}
+
+#[tokio::test]
+async fn robots_disallowed_urls_are_skipped_without_a_request() {
+    let transport = FakeTransport::default();
+    let store = MemoryStore::enabled();
+    let clock = FixedClock(NOW);
+    let sink = MemorySink::default();
+    let robots = checker(
+        "User-agent: *
+Disallow: /search",
+    );
+    let outcome = Runner {
+        robots: Some(&robots),
+        ..runner(&transport, &store, &clock)
+    }
+    .start_unlocker_run(
+        &scope("j"),
+        &[TargetUrl::parse("https://shop.example/search?q=a").unwrap()],
+        None,
+        PageAccess::Unlocker,
+        &sink,
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome.status, RunStatus::BlockedNeedsKyc);
+    assert_eq!(outcome.failed_count, 1);
+    assert!(transport.calls.lock().unwrap().is_empty());
+    let access = store.state.lock().unwrap().access.clone();
+    assert_eq!(
+        access,
+        vec![(
+            outcome.run_id.0,
+            "shop.example".to_owned(),
+            AccessOutcome::SkippedRobots
+        )]
+    );
+}
+
+#[tokio::test]
+async fn kyc_refusals_end_the_run_blocked_and_mixed_runs_stay_imported() {
+    let transport = FakeTransport {
+        unlock: queue([Err(BrightDataError::BlockedNeedsKyc {
+            reason: RefusalReason::RobotsDisallowed,
+            message: "robots".to_owned(),
+        })]),
+        ..FakeTransport::default()
+    };
+    let store = MemoryStore::enabled();
+    let clock = FixedClock(NOW);
+    let sink = MemorySink::default();
+    let one = [TargetUrl::parse("https://shop.example/a").unwrap()];
+    let outcome = runner(&transport, &store, &clock)
+        .start_unlocker_run(&scope("j"), &one, None, PageAccess::Unlocker, &sink)
+        .await
+        .unwrap();
+    assert_eq!(outcome.status, RunStatus::BlockedNeedsKyc);
+    assert_eq!(
+        store.state.lock().unwrap().access[0].2,
+        AccessOutcome::BlockedNeedsKyc
+    );
+
+    let transport = FakeTransport {
+        unlock: queue([
+            Err(BrightDataError::BlockedNeedsKyc {
+                reason: RefusalReason::Policy,
+                message: "policy".to_owned(),
+            }),
+            Ok(page()),
+        ]),
+        ..FakeTransport::default()
+    };
+    let store = MemoryStore::enabled();
+    let two = [
+        TargetUrl::parse("https://shop.example/a").unwrap(),
+        TargetUrl::parse("https://shop.example/b").unwrap(),
+    ];
+    let outcome = runner(&transport, &store, &clock)
+        .start_unlocker_run(&scope("j"), &two, None, PageAccess::Unlocker, &sink)
+        .await
+        .unwrap();
+    assert_eq!(outcome.status, RunStatus::Imported);
+    assert_eq!((outcome.row_count, outcome.failed_count), (1, 1));
+}
+
+#[tokio::test]
+async fn browser_access_uses_browse_with_the_same_gates_and_events() {
+    let clock = FixedClock(NOW);
+    let sink = MemorySink::default();
+    let transport = FakeTransport {
+        unlock: queue([Ok(page())]),
+        ..FakeTransport::default()
+    };
+    let store = MemoryStore::enabled();
+    let outcome = runner(&transport, &store, &clock)
+        .start_unlocker_run(&scope("j"), &urls(&["a"]), None, PageAccess::Browser, &sink)
+        .await
+        .unwrap();
+    assert_eq!(outcome.status, RunStatus::Imported);
+    assert_eq!(transport.calls(), ["browse"]);
+    assert_eq!(store.state.lock().unwrap().access[0].2, AccessOutcome::Ok);
+    assert!(
+        store
+            .run(outcome.run_id)
+            .input_json
+            .contains("\"access\":\"browser\"")
+    );
+
+    let disabled = MemoryStore::default();
+    let result = runner(&transport, &disabled, &clock)
+        .start_unlocker_run(&scope("j"), &urls(&["a"]), None, PageAccess::Browser, &sink)
+        .await;
+    assert_eq!(result, Err(RunError::Gate(GateError::ConnectorDisabled)));
+    assert_eq!(transport.calls(), ["browse"]);
 }

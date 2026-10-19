@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/admin/brightdata/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bright Data access outcomes per retailer host (admin only). */
+        get: operations["brightdata_access"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -30,6 +47,33 @@ export interface components {
             /** @description Always `"ok"` when the process is serving requests. */
             status: string;
         };
+        /** @description Access outcomes for one retailer host. */
+        RetailerAccessCounts: {
+            /**
+             * Format: int64
+             * @description Refusals that need KYC (`blocked_needs_kyc`).
+             */
+            blocked_needs_kyc: number;
+            /**
+             * Format: int64
+             * @description Other failures.
+             */
+            failed: number;
+            /** @description Target host. */
+            host: string;
+            /**
+             * Format: int64
+             * @description Pages fetched.
+             */
+            ok: number;
+            /** @description Retailer id from the registry, or the host when it is not registered. */
+            retailer: string;
+            /**
+             * Format: int64
+             * @description URLs skipped because robots.txt disallows them.
+             */
+            skipped_robots: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -39,6 +83,47 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    brightdata_access: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Outcome counts per host */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailerAccessCounts"][];
+                };
+            };
+            /** @description Missing or wrong bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Counts could not be read */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Admin API is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;

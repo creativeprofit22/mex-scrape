@@ -371,6 +371,67 @@ pub async fn active_runs(pool: &PgPool) -> Result<Vec<RunRow>, sqlx::Error> {
     rows.iter().map(run_row).collect()
 }
 
+/// Access outcomes for one host, summed over all events.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostAccessCounts {
+    /// The target host.
+    pub host: String,
+    /// Pages fetched.
+    pub ok: i64,
+    /// Refusals that need KYC.
+    pub blocked_needs_kyc: i64,
+    /// URLs skipped because robots.txt disallows them.
+    pub skipped_robots: i64,
+    /// Other failures.
+    pub failed: i64,
+}
+
+/// Records one URL access outcome. `outcome` must be one of `ok`,
+/// `blocked_needs_kyc`, `skipped_robots`, `failed` (the table CHECK
+/// rejects anything else).
+///
+/// # Errors
+///
+/// Database errors; redact before logging.
+pub async fn insert_access_event(
+    pool: &PgPool,
+    run_id: i64,
+    host: &str,
+    outcome: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO brightdata_access_events (run_id, host, outcome) VALUES ($1, $2, $3)")
+        .bind(run_id)
+        .bind(host)
+        .bind(outcome)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Outcome counts per host, sorted by host.
+///
+/// # Errors
+///
+/// Database errors; redact before logging.
+pub async fn access_counts_by_host(pool: &PgPool) -> Result<Vec<HostAccessCounts>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT host,             COUNT(*) FILTER (WHERE outcome = 'ok') AS ok,             COUNT(*) FILTER (WHERE outcome = 'blocked_needs_kyc') AS blocked,             COUNT(*) FILTER (WHERE outcome = 'skipped_robots') AS skipped,             COUNT(*) FILTER (WHERE outcome = 'failed') AS failed          FROM brightdata_access_events GROUP BY host ORDER BY host",
+    )
+    .fetch_all(pool)
+    .await?;
+    rows.iter()
+        .map(|row| {
+            Ok(HostAccessCounts {
+                host: row.try_get("host")?,
+                ok: row.try_get("ok")?,
+                blocked_needs_kyc: row.try_get("blocked")?,
+                skipped_robots: row.try_get("skipped")?,
+                failed: row.try_get("failed")?,
+            })
+        })
+        .collect()
+}
+
 /// A held driver lock: a dedicated connection holding a session advisory
 /// lock. Dropping it closes the connection, which releases the lock.
 pub struct DriverLock {

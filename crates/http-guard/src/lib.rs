@@ -13,6 +13,10 @@
 //! - error messages never contain the URL, are redacted with a
 //!   [`Redactor`] and truncated to [`MAX_ERROR_MESSAGE_CHARS`].
 //!
+//! [`GuardedWebSocket`] applies the same rules to WebSockets (`wss` only,
+//! one allowlisted host and port, credentials only in a sensitive header);
+//! it exists for the Bright Data Browser API (ADR 0007).
+//!
 //! Secrets are [`Secret`] values (defined in the `secrets` crate and
 //! re-exported here): no `Debug`, `Display` or `Serialize`, sent only as
 //! sensitive headers.
@@ -23,6 +27,11 @@ mod ip;
 mod policy;
 mod resolver;
 mod secret;
+mod websocket;
+
+#[cfg(any(test, feature = "test-support"))]
+pub use websocket::test_support;
+pub use websocket::{GuardedWebSocket, GuardedWebSocketBuilder};
 
 pub use client::{
     DEFAULT_CONNECT_TIMEOUT, DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TOTAL_TIMEOUT, GuardedClient,

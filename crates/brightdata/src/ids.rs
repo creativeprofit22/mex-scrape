@@ -140,6 +140,15 @@ impl TargetUrl {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The lowercase host (validated present by [`TargetUrl::parse`]).
+    #[must_use]
+    pub fn host(&self) -> String {
+        Url::parse(&self.0)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
+            .unwrap_or_default()
+    }
 }
 
 /// An ISO 3166-1 alpha-2 country for Web Unlocker geo-targeting, stored

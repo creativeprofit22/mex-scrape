@@ -9,8 +9,9 @@ Fails (exit 1) when a workspace crate:
 
 Also fails when ``domain`` has any workspace dependency, when the
 allowed-dependencies table names a crate that does not exist, or when any
-crate other than ``http-guard`` depends directly on an HTTP client crate
-(all outbound calls must use ``http_guard::GuardedClient``), or when the
+crate other than ``http-guard`` depends directly on an HTTP or WebSocket
+client crate (all outbound calls must use ``http_guard::GuardedClient`` or
+``http_guard::GuardedWebSocket``), or when the
 ``http-guard`` feature ``test-support`` (which disables the transport policy)
 is enabled outside ``[dev-dependencies]``: in a member's ``[dependencies]`` or
 ``[build-dependencies]`` (target-specific included) or in
@@ -35,7 +36,10 @@ PURE_CRATE = "domain"
 NONE_MARKERS = frozenset({"", "-", "—", "none"})
 HTTP_GUARD_CRATE = "http-guard"
 HTTP_GUARD_TEST_FEATURE = "test-support"
-HTTP_CLIENT_CRATES = frozenset({"reqwest", "ureq", "isahc", "attohttpc", "surf"})
+# HTTP and WebSocket clients; WebSockets go through http_guard::GuardedWebSocket (ADR 0007).
+HTTP_CLIENT_CRATES = frozenset(
+    {"reqwest", "ureq", "isahc", "attohttpc", "surf", "tungstenite", "tokio-tungstenite"}
+)
 
 
 class DocsCheckError(Exception):
@@ -247,8 +251,8 @@ def _http_guard_errors(crate: Crate) -> list[str]:
     errors: list[str] = []
     if crate.name != HTTP_GUARD_CRATE:
         errors.extend(
-            f"{crate.name}: depends on HTTP client crate {dep}; "
-            f"only {HTTP_GUARD_CRATE} may (use http_guard::GuardedClient)"
+            f"{crate.name}: depends on network client crate {dep}; "
+            f"only {HTTP_GUARD_CRATE} may (use http_guard::GuardedClient or GuardedWebSocket)"
             for dep in sorted(crate.direct_deps & HTTP_CLIENT_CRATES)
         )
     if (HTTP_GUARD_CRATE, HTTP_GUARD_TEST_FEATURE) in crate.non_dev_features:

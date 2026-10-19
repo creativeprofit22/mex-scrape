@@ -36,13 +36,14 @@ Secrets (defined in the [`secrets`](secrets.md) crate and re-exported here):
 - `Secret` (`new`, `from_lookup`, `from_env`, `expose_secret`), `SecretError`, `Redactor` (`new`, `with`, `redact`, `sanitize`), `truncate_error_message`.
 - `is_non_public_ip`, `is_non_public_ipv4`, `is_non_public_ipv6`.
 - Constants: `DEFAULT_MAX_RESPONSE_BYTES` (8 MiB), `SMALL_RESPONSE_BYTES` (256 KiB, for tokens and error bodies), `MAX_ERROR_MESSAGE_CHARS` (500), `DEFAULT_CONNECT_TIMEOUT`, `DEFAULT_TOTAL_TIMEOUT`.
+- `GuardedWebSocket` ([ADR 0007](../decisions/0007-brightdata-browser-api.md)), the only WebSocket client, used for the Bright Data Browser API. `GuardedWebSocket::builder(HostAllowlist, port)` takes `.policy()`, `.connect_timeout()` (DNS + TCP + TLS + handshake), `.max_message_bytes()` (default 8 MiB) and `.redactor()`. `.connect(&Url, basic_auth: Option<(&Secret, &Secret)>)` allows `wss` only, an allowlisted host, the one configured port and no userinfo. It sends credentials only as a sensitive `Authorization: Basic` header (both parts are redacted from errors), uses no proxy and accepts only public DNS answers. The socket provides `send_text`, `recv_text` (text frames only; larger messages fail with `BodyTooLarge`) and `close`. Errors are `GuardError`s that never contain the URL. With `test-support`, `test_support::serve(script)` starts a loopback fake WebSocket server (`FakePeer::recv`/`send`, `headers()`, `finished()`).
 - Re-exports `Method`, `StatusCode`, `Url` and `header`, so callers never need reqwest themselves. Build query strings with `Url::query_pairs_mut`.
 
 ### How other crates must use it
 
-- Never depend on `reqwest` (or any other HTTP client) or build a client yourself. `scripts/check_docs.py` fails CI if a crate other than `http-guard` depends on one.
+- Never depend on `reqwest`, `tungstenite`/`tokio-tungstenite` (or any other HTTP or WebSocket client) or build a client yourself. `scripts/check_docs.py` fails CI if a crate other than `http-guard` depends on one.
 - Build one `GuardedClient` per provider, with only that provider's hosts:
-  - Bright Data: `api.brightdata.com`.
+  - Bright Data: `api.brightdata.com`; Browser API WebSocket: `brd.superproxy.io`, port 9222 only.
   - SP-API: `sellingpartnerapi-na.amazon.com`, plus `api.amazon.com` for LWA tokens.
 - Give the client a `Redactor` over every secret it sends.
 - Send secrets only through `secret_header` or `bearer`, never in URLs.
@@ -57,7 +58,7 @@ TLS uses rustls with the platform verifier, so production images need the OS CA 
 ## Dependencies
 
 - Workspace: `secrets` (re-exported).
-- External: `reqwest` (rustls, http2; no default features), `tokio` (`net`), `serde`, `serde_json`, `thiserror`.
+- External: `reqwest` (rustls, http2; no default features), `tokio` (`net`), `serde`, `serde_json`, `thiserror`; for WebSockets `tokio-tungstenite` (`handshake` only), `tokio-rustls` (aws-lc-rs, TLS 1.2+1.3), `rustls-platform-verifier`, `futures-util` (`sink`) and `base64`.
 
 ## Owned tables
 

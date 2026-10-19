@@ -12,6 +12,10 @@
 //!   error is transient, and classified as [`BrightDataError::Terminal`] or
 //!   [`BrightDataError::Transient`]. Errors never contain the URL, the API
 //!   key or the zone name.
+//! - Browser API (ADR 0007): [`Transport::browse`] renders a page in a
+//!   remote Chrome over CDP (`http_guard::GuardedWebSocket`), only for
+//!   targets proven to need JavaScript; needs a browser zone
+//!   ([`BrightDataConfig::with_browser_zone`]).
 //! - [`Transport`]: the five calls a run needs; implemented by the client
 //!   and by test fakes.
 //! - [`runs`]: run start/drive/resume/cancel behind fail-closed gates, with
@@ -24,17 +28,21 @@ mod error;
 mod ids;
 mod rate;
 pub mod recovery;
+mod refusal;
 mod retry;
+pub mod robots;
 pub mod runs;
 mod transport;
 
+pub use client::browser::{BRIGHTDATA_BROWSER_HOST, BRIGHTDATA_BROWSER_PORT};
 pub use client::{
     BRIGHTDATA_API_BASE, BRIGHTDATA_API_HOST, BrightDataClient, DatasetTrigger, Download,
     MAX_TRIGGER_INPUTS, SnapshotStatus, UnlockRequest, UnlockedPage,
 };
-pub use config::{BrightDataConfig, ConfigError};
+pub use config::{BrightDataConfig, BrowserSettle, ConfigError};
 pub use error::{BrightDataError, is_transient_status};
 pub use ids::{CountryCode, DatasetId, DiscoverBy, SnapshotId, TargetUrl};
 pub use rate::{RateKey, RateLimits, ZoneLimiter};
+pub use refusal::{RefusalReason, classify_browser_error, classify_unlocker};
 pub use retry::{RetryPolicy, parse_retry_after};
 pub use transport::Transport;

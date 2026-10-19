@@ -17,6 +17,21 @@ pub trait Transport: Send + Sync {
         request: &UnlockRequest,
     ) -> impl Future<Output = Result<UnlockedPage, BrightDataError>> + Send;
 
+    /// Browser API: fetches one page rendered by a remote Chrome (CDP) and
+    /// returns its HTML. Only for targets proven to need JavaScript. The
+    /// default fails terminally ("browser not configured").
+    fn browse(
+        &self,
+        request: &UnlockRequest,
+    ) -> impl Future<Output = Result<UnlockedPage, BrightDataError>> + Send {
+        let _ = request;
+        async {
+            Err(BrightDataError::Terminal(
+                "Bright Data Browser API is not configured".to_owned(),
+            ))
+        }
+    }
+
     /// Datasets v3: starts a collection; returns its snapshot id.
     fn trigger(
         &self,

@@ -5,9 +5,10 @@ use std::ffi::OsString;
 use http_guard::{Redactor, Secret, SecretError};
 
 /// Every secret the worker reads, in log order.
-const SECRET_VARS: [&str; 6] = [
+const SECRET_VARS: [&str; 7] = [
     "BRIGHTDATA_API_KEY",
     "BRIGHTDATA_UNLOCKER_ZONE",
+    "BRIGHTDATA_BROWSER_ZONE",
     "SPAPI_LWA_CLIENT_ID",
     "SPAPI_LWA_CLIENT_SECRET",
     "SPAPI_REFRESH_TOKEN",
@@ -19,6 +20,7 @@ const SECRET_VARS: [&str; 6] = [
 pub(crate) struct ServerSecrets {
     brightdata_api_key: Option<Secret>,
     brightdata_unlocker_zone: Option<Secret>,
+    brightdata_browser_zone: Option<Secret>,
     spapi_lwa_client_id: Option<Secret>,
     spapi_lwa_client_secret: Option<Secret>,
     spapi_refresh_token: Option<Secret>,
@@ -39,6 +41,7 @@ impl ServerSecrets {
         let [
             brightdata_api_key,
             brightdata_unlocker_zone,
+            brightdata_browser_zone,
             spapi_lwa_client_id,
             spapi_lwa_client_secret,
             spapi_refresh_token,
@@ -48,6 +51,7 @@ impl ServerSecrets {
         Ok(Self {
             brightdata_api_key: load(brightdata_api_key)?,
             brightdata_unlocker_zone: load(brightdata_unlocker_zone)?,
+            brightdata_browser_zone: load(brightdata_browser_zone)?,
             spapi_lwa_client_id: load(spapi_lwa_client_id)?,
             spapi_lwa_client_secret: load(spapi_lwa_client_secret)?,
             spapi_refresh_token: load(spapi_refresh_token)?,
@@ -55,29 +59,31 @@ impl ServerSecrets {
         })
     }
 
-    fn entries(&self) -> [(&'static str, Option<&Secret>); 6] {
-        let [a, b, c, d, e, f] = SECRET_VARS;
+    fn entries(&self) -> [(&'static str, Option<&Secret>); 7] {
+        let [a, b, c, d, e, f, g] = SECRET_VARS;
         [
             (a, self.brightdata_api_key.as_ref()),
             (b, self.brightdata_unlocker_zone.as_ref()),
-            (c, self.spapi_lwa_client_id.as_ref()),
-            (d, self.spapi_lwa_client_secret.as_ref()),
-            (e, self.spapi_refresh_token.as_ref()),
-            (f, self.model_provider_api_key.as_ref()),
+            (c, self.brightdata_browser_zone.as_ref()),
+            (d, self.spapi_lwa_client_id.as_ref()),
+            (e, self.spapi_lwa_client_secret.as_ref()),
+            (f, self.spapi_refresh_token.as_ref()),
+            (g, self.model_provider_api_key.as_ref()),
         ]
     }
 
-    /// `BRIGHTDATA_API_KEY` and `BRIGHTDATA_UNLOCKER_ZONE`, for the client
-    /// config.
-    pub(crate) fn brightdata(&self) -> (Option<Secret>, Option<Secret>) {
+    /// `BRIGHTDATA_API_KEY`, `BRIGHTDATA_UNLOCKER_ZONE` and the optional
+    /// `BRIGHTDATA_BROWSER_ZONE`, for the client config.
+    pub(crate) fn brightdata(&self) -> (Option<Secret>, Option<Secret>, Option<Secret>) {
         (
             self.brightdata_api_key.clone(),
             self.brightdata_unlocker_zone.clone(),
+            self.brightdata_browser_zone.clone(),
         )
     }
 
     /// Which variables are set, in fixed order; safe to log.
-    pub(crate) fn presence(&self) -> [(&'static str, bool); 6] {
+    pub(crate) fn presence(&self) -> [(&'static str, bool); 7] {
         self.entries()
             .map(|(name, secret)| (name, secret.is_some()))
     }

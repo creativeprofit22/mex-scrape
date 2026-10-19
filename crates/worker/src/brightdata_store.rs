@@ -3,8 +3,8 @@
 
 use brightdata::SnapshotId;
 use brightdata::runs::{
-    Caps, GateError, GateState, NewRun, RunId, RunMode, RunRecord, RunScope, RunStatus, RunStore,
-    RunUpdate, StoreError,
+    AccessOutcome, Caps, GateError, GateState, NewRun, RunId, RunMode, RunRecord, RunScope,
+    RunStatus, RunStore, RunUpdate, StoreError,
 };
 use db::PgPool;
 use db::brightdata_runs::{self as rows, InsertRunError, NewRunRow, RunCaps, RunPatch, RunRow};
@@ -165,6 +165,17 @@ impl RunStore for PgRunStore {
             .await
             .map_err(|error| self.storage(&error))?;
         Ok(settings.is_none_or(|settings| settings.global_kill_switch))
+    }
+
+    async fn record_access(
+        &self,
+        run: RunId,
+        host: &str,
+        outcome: AccessOutcome,
+    ) -> Result<(), StoreError> {
+        rows::insert_access_event(&self.pool, run.0, host, outcome.as_str())
+            .await
+            .map_err(|error| self.storage(&error))
     }
 }
 

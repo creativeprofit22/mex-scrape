@@ -10,6 +10,41 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/admin/brightdata/access": {
+      "get": {
+        "summary": "Bright Data access outcomes per retailer host (admin only).",
+        "operationId": "brightdata_access",
+        "responses": {
+          "200": {
+            "description": "Outcome counts per host",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RetailerAccessCounts"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token"
+          },
+          "500": {
+            "description": "Counts could not be read"
+          },
+          "503": {
+            "description": "Admin API is not configured"
+          }
+        },
+        "security": [
+          {
+            "admin_bearer": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "summary": "Report that the API process is alive (does not check the database).",
@@ -43,6 +78,54 @@
             "description": "Always `\"ok\"` when the process is serving requests."
           }
         }
+      },
+      "RetailerAccessCounts": {
+        "type": "object",
+        "description": "Access outcomes for one retailer host.",
+        "required": [
+          "retailer",
+          "host",
+          "ok",
+          "blocked_needs_kyc",
+          "skipped_robots",
+          "failed"
+        ],
+        "properties": {
+          "blocked_needs_kyc": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Refusals that need KYC (`blocked_needs_kyc`)."
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Other failures."
+          },
+          "host": {
+            "type": "string",
+            "description": "Target host."
+          },
+          "ok": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Pages fetched."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id from the registry, or the host when it is not registered."
+          },
+          "skipped_robots": {
+            "type": "integer",
+            "format": "int64",
+            "description": "URLs skipped because robots.txt disallows them."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "admin_bearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }

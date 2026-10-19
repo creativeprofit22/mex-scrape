@@ -3,21 +3,49 @@
 //! The spec is the contract with the Next.js app in `web/`: its TypeScript
 //! client is generated from it (`npm --prefix web run gen:api`).
 
+mod admin;
+
+pub use admin::{
+    AccessSource, AdminState, CountsFuture, MIN_TOKEN_LEN, PgAccessSource, RetailerAccessCounts,
+};
+
 use axum::{Json, Router, routing::get};
 use serde::Serialize;
-use utoipa::{OpenApi, ToSchema};
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::{Modify, OpenApi, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 /// Path where the OpenAPI spec is served.
 pub const OPENAPI_PATH: &str = "/api-docs/openapi.json";
 
+/// Name of the security scheme for `Authorization: Bearer <ADMIN_API_TOKEN>`.
+pub const ADMIN_BEARER: &str = "admin_bearer";
+
 #[derive(OpenApi)]
-#[openapi(info(
-    title = "mex-scrape API",
-    version = "0.1.0",
-    description = "Backend API for mex-scrape."
-))]
+#[openapi(
+    info(
+        title = "mex-scrape API",
+        version = "0.1.0",
+        description = "Backend API for mex-scrape."
+    ),
+    modifiers(&SecurityAddon)
+)]
 struct ApiDoc;
+
+/// Registers the admin bearer-token security scheme in the spec.
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi
+            .components
+            .get_or_insert_with(Default::default)
+            .add_security_scheme(
+                ADMIN_BEARER,
+                SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()),
+            );
+    }
+}
 
 /// Liveness response for `GET /health`.
 #[derive(Debug, Serialize, ToSchema)]
@@ -39,12 +67,20 @@ async fn health() -> Json<HealthResponse> {
     })
 }
 
-/// Builds the application router and its OpenAPI spec.
+/// Builds the application router and its OpenAPI spec, with the admin
+/// routes disabled (they answer 503).
 ///
 /// The returned router also serves the spec at [`OPENAPI_PATH`].
 pub fn router() -> (Router, utoipa::openapi::OpenApi) {
+    router_with(AdminState::disabled())
+}
+
+/// Like [`router`], with the admin routes configured by `admin`.
+pub fn router_with(admin: AdminState) -> (Router, utoipa::openapi::OpenApi) {
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(health))
+        .routes(routes!(admin::brightdata_access))
+        .with_state(admin)
         .split_for_parts();
     let spec = api.clone();
     let router = router.route(

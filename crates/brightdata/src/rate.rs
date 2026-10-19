@@ -14,6 +14,8 @@ pub enum RateKey {
     Unlocker,
     /// Datasets v3 (trigger, progress, download, cancel).
     Datasets,
+    /// Browser API sessions (and their credential lookups).
+    Browser,
 }
 
 /// Minimum spacing between consecutive requests per [`RateKey`].
@@ -23,6 +25,8 @@ pub struct RateLimits {
     pub unlocker_interval: Duration,
     /// Spacing for Datasets v3 requests (default 1 s).
     pub datasets_interval: Duration,
+    /// Spacing for Browser API sessions (default 1 s).
+    pub browser_interval: Duration,
 }
 
 impl Default for RateLimits {
@@ -30,6 +34,7 @@ impl Default for RateLimits {
         Self {
             unlocker_interval: Duration::from_millis(500),
             datasets_interval: Duration::from_secs(1),
+            browser_interval: Duration::from_secs(1),
         }
     }
 }
@@ -39,6 +44,7 @@ impl RateLimits {
         match key {
             RateKey::Unlocker => self.unlocker_interval,
             RateKey::Datasets => self.datasets_interval,
+            RateKey::Browser => self.browser_interval,
         }
     }
 }
