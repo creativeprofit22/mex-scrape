@@ -13,8 +13,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  check:
+  python:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -30,8 +33,7 @@ jobs:
       - name: Install project
         run: uv sync --locked
 
-      # No test suite or build step exists yet; run the lint/format/typecheck
-      # tools configured in pyproject.toml ([tool.ruff], [tool.pyright]).
+      # Lint/format/typecheck tools configured in pyproject.toml ([tool.ruff], [tool.pyright]).
       - name: Lint
         run: uvx ruff@0.15.20 check .
 
@@ -40,3 +42,108 @@ jobs:
 
       - name: Typecheck
         run: uvx pyright@1.1.414
+
+      # Fails if a crate lacks docs/modules/<crate>.md, is missing from
+      # docs/ARCHITECTURE.md, or breaks the allowed-dependencies table.
+      - name: Docs check
+        run: uv run python scripts/check_docs.py
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Installs the toolchain pinned in rust-toolchain.toml.
+      - name: Install Rust toolchain
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@v2.9.2
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: OpenAPI spec is up to date
+        run: |
+          cargo run -q --locked -p api --bin openapi -- web/openapi.json
+          git diff --exit-code web/openapi.json
+
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        # Keep in sync with compose.yaml.
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_USER: mex
+          POSTGRES_PASSWORD: mex
+          POSTGRES_DB: mex_scrape
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mex -d mex_scrape"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://mex:mex@127.0.0.1:5432/mex_scrape
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@v2.9.2
+
+      - name: Apply migrations to an empty database
+        run: cargo run --locked -p db --bin migrate
+
+      - name: Re-run migrations (must be a no-op)
+        run: cargo run --locked -p db --bin migrate
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # The rust job checks openapi.json against the Rust code; this checks
+      # the generated TypeScript client against openapi.json.
+      - name: Generated API client is up to date
+        run: |
+          npx openapi-typescript openapi.json -o src/lib/api/schema.ts
+          git diff --exit-code src/lib/api/schema.ts
