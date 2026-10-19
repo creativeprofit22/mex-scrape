@@ -1,0 +1,51 @@
+{
+  "numberOfResults": 1,
+  "items": [
+    {
+      "asin": "B0SYNTH001",
+      "identifiers": [
+        {
+          "marketplaceId": "A1AM78C64UM0Y8",
+          "identifiers": [{ "identifierType": "UPC", "identifier": "012345678905" }]
+        }
+      ],
+      "images": [
+        {
+          "marketplaceId": "ATVPDKIKX0DER",
+          "images": [{ "variant": "MAIN", "link": "https://m.media-amazon.com/images/I/us-only.jpg", "height": 500, "width": 500 }]
+        },
+        {
+          "marketplaceId": "A1AM78C64UM0Y8",
+          "images": [
+            { "variant": "PT01", "link": "https://m.media-amazon.com/images/I/synthetic-pt01.jpg", "height": 500, "width": 500 },
+            { "variant": "MAIN", "link": "https://m.media-amazon.com/images/I/synthetic-main.jpg", "height": 1500, "width": 1500 },
+            { "variant": "MAIN", "link": "https://m.media-amazon.com/images/I/synthetic-main.jpg", "height": 75, "width": 75 },
+            { "variant": "PT02", "link": "http://insecure.example/x.jpg", "height": 75, "width": 75 }
+          ]
+        }
+      ],
+      "salesRanks": [
+        {
+          "marketplaceId": "A1AM78C64UM0Y8",
+          "classificationRanks": [
+            { "classificationId": "9725453011", "title": "Taladros", "link": "https://www.amazon.com.mx/gp/bestsellers/hi/9725453011", "rank": 87 }
+          ],
+          "displayGroupRanks": [
+            { "websiteDisplayGroup": "home_improvement_display_on_website", "title": "Herramientas y Mejoras del Hogar", "link": "https://www.amazon.com.mx/gp/bestsellers/hi", "rank": 1520 }
+          ]
+        }
+      ],
+      "summaries": [
+        {
+          "marketplaceId": "A1AM78C64UM0Y8",
+          "brand": "MarcaPrueba",
+          "browseClassification": { "displayName": "Taladros", "classificationId": "9725453011" },
+          "itemClassification": "BASE_PRODUCT",
+          "itemName": "Taladro  Inalámbrico 20V Sintético",
+          "manufacturer": "MarcaPrueba",
+          "modelNumber": "SYN-20V"
+        }
+      ]
+    }
+  ]
+}

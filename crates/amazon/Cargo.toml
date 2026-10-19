@@ -9,6 +9,19 @@ publish.workspace = true
 [lints]
 workspace = true
 
+# Amazon.com.mx data (ADR 0010): SP-API client plus the Bright Data
+# Amazon-dataset fallback, both behind `app::ports::AmazonSource`. All HTTP
+# goes through http-guard.
 [dependencies]
+app.workspace = true
+brightdata.workspace = true
 domain.workspace = true
 http-guard.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time", "sync"] }
+
+[dev-dependencies]
+http-guard = { workspace = true, features = ["test-support"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync", "test-util"] }

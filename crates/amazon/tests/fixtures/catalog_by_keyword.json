@@ -1,0 +1,28 @@
+{
+  "numberOfResults": 3,
+  "pagination": { "nextToken": "synthetic-next-token" },
+  "refinements": { "brands": [], "classifications": [] },
+  "items": [
+    {
+      "asin": "B0SYNTH001",
+      "images": [
+        {
+          "marketplaceId": "A1AM78C64UM0Y8",
+          "images": [{ "variant": "MAIN", "link": "https://m.media-amazon.com/images/I/synthetic-main.jpg", "height": 500, "width": 500 }]
+        }
+      ],
+      "salesRanks": [],
+      "summaries": [
+        { "marketplaceId": "A1AM78C64UM0Y8", "brand": "MarcaPrueba", "itemName": "Taladro Inalámbrico 20V Sintético" }
+      ]
+    },
+    {
+      "asin": "B0SYNTH002",
+      "summaries": [{ "marketplaceId": "A1AM78C64UM0Y8", "itemName": "Broca para concreto 1/4 Sintética", "brand": "  " }]
+    },
+    {
+      "asin": "B0SYNTH003",
+      "summaries": [{ "marketplaceId": "ATVPDKIKX0DER", "itemName": "US only item" }]
+    }
+  ]
+}

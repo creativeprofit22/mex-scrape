@@ -82,6 +82,16 @@ impl ServerSecrets {
         )
     }
 
+    /// `SPAPI_LWA_CLIENT_ID`, `SPAPI_LWA_CLIENT_SECRET` and
+    /// `SPAPI_REFRESH_TOKEN`, for `amazon::SpApiConfig::from_secrets`.
+    pub(crate) fn spapi(&self) -> (Option<Secret>, Option<Secret>, Option<Secret>) {
+        (
+            self.spapi_lwa_client_id.clone(),
+            self.spapi_lwa_client_secret.clone(),
+            self.spapi_refresh_token.clone(),
+        )
+    }
+
     /// Which variables are set, in fixed order; safe to log.
     pub(crate) fn presence(&self) -> [(&'static str, bool); 7] {
         self.entries()
@@ -106,6 +116,19 @@ mod tests {
             .map(|(k, v)| ((*k).to_owned(), OsString::from(*v)))
             .collect();
         ServerSecrets::from_lookup(|name| map.get(name).cloned())
+    }
+
+    #[test]
+    fn spapi_returns_the_three_lwa_values() {
+        let secrets = load(&[
+            ("SPAPI_LWA_CLIENT_ID", "id-1"),
+            ("SPAPI_REFRESH_TOKEN", "refresh-1"),
+        ])
+        .unwrap();
+        let (id, secret, refresh) = secrets.spapi();
+        assert_eq!(id.unwrap().expose_secret(), "id-1");
+        assert!(secret.is_none());
+        assert_eq!(refresh.unwrap().expose_secret(), "refresh-1");
     }
 
     #[test]

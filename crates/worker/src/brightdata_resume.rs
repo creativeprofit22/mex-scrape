@@ -3,10 +3,17 @@
 //! No product importer exists yet, so results go to [`RefusingSink`]: it
 //! refuses every record with fixed text, which leaves a downloaded run
 //! `ready` and resumable (the snapshot stays on Bright Data for 24 h).
+//!
+//! Amazon fallback lookups (scope `system`/`amazon_mx_fallback`) are not
+//! resumed: their result was only useful to the caller that died with the
+//! worker, and while active they would block every new fallback lookup.
+//! They are failed with [`FALLBACK_INTERRUPTED`] instead.
 
-use brightdata::runs::{Clock, RunId, RunSink, RunStore, Runner};
+use brightdata::runs::{
+    Clock, RunId, RunScope, RunSink, RunStatus, RunStore, RunUpdate, Runner, StoreError,
+};
 use brightdata::{
-    BrightDataClient, BrightDataConfig, ConfigError, TargetUrl, Transport, UnlockedPage,
+    BrightDataClient, BrightDataConfig, ConfigError, SnapshotId, TargetUrl, Transport, UnlockedPage,
 };
 use http_guard::{Redactor, Secret};
 use serde_json::Value;
@@ -14,6 +21,10 @@ use serde_json::Value;
 /// Returned for every result until a product importer is registered.
 pub(crate) const NO_IMPORTER: &str =
     "No importer is registered for Bright Data results yet; the run stays resumable";
+
+/// Stored on Amazon fallback runs interrupted by a worker stop.
+pub(crate) const FALLBACK_INTERRUPTED: &str =
+    "Amazon fallback lookup interrupted; its caller is gone";
 
 /// Placeholder [`RunSink`]: refuses pages and records with [`NO_IMPORTER`].
 pub(crate) struct RefusingSink;
@@ -70,9 +81,44 @@ pub(crate) struct ResumeReport {
     /// Resumes refused (a gate, an invalid run or storage); the run is
     /// left as it was.
     pub(crate) refused: u32,
+    /// Amazon fallback runs failed instead of resumed.
+    pub(crate) abandoned: u32,
 }
 
-/// Resumes each kept run in order. The caller must hold the driver lock.
+/// True for the Amazon fallback's run scope.
+fn is_amazon_fallback(scope: &RunScope) -> bool {
+    scope.tenant_id() == amazon::FALLBACK_TENANT && scope.job() == amazon::FALLBACK_JOB
+}
+
+/// Fails `id` with [`FALLBACK_INTERRUPTED`] when it is an Amazon fallback
+/// run and, best effort, cancels its Bright Data collection. Returns false
+/// (doing nothing) for any other run, or one that no longer exists.
+async fn abandon_fallback<T: Transport, S: RunStore, C: Clock>(
+    runner: &Runner<'_, T, S, C>,
+    id: RunId,
+) -> Result<bool, StoreError> {
+    let Some(run) = runner.store.load_run(id).await? else {
+        return Ok(false);
+    };
+    if !is_amazon_fallback(&run.scope) {
+        return Ok(false);
+    }
+    let update = RunUpdate::status(RunStatus::Failed).message(FALLBACK_INTERRUPTED);
+    let failed = runner
+        .store
+        .update_if_active(id, &update, runner.clock.now_ms())
+        .await?;
+    if failed
+        && let Some(transport) = runner.transport
+        && let Some(Ok(snapshot)) = run.snapshot_id.as_deref().map(SnapshotId::parse)
+    {
+        let _ = transport.cancel(&snapshot).await;
+    }
+    Ok(true)
+}
+
+/// Resumes each kept run in order, except Amazon fallback runs, which are
+/// failed (see the module docs). The caller must hold the driver lock.
 pub(crate) async fn resume_kept<T: Transport, S: RunStore, C: Clock>(
     runner: &Runner<'_, T, S, C>,
     kept: &[RunId],
@@ -81,6 +127,20 @@ pub(crate) async fn resume_kept<T: Transport, S: RunStore, C: Clock>(
 ) -> ResumeReport {
     let mut report = ResumeReport::default();
     for &id in kept {
+        match abandon_fallback(runner, id).await {
+            Ok(true) => {
+                tracing::info!(run_id = id.0, "Amazon fallback run failed, not resumed");
+                report.abandoned += 1;
+                continue;
+            }
+            Ok(false) => {}
+            Err(error) => {
+                let message = redactor.sanitize(&error.to_string());
+                tracing::warn!(run_id = id.0, error = %message, "Bright Data run check refused");
+                report.refused += 1;
+                continue;
+            }
+        }
         match runner.resume_run(id, sink).await {
             Ok(outcome) => {
                 let message = redactor.sanitize(&outcome.message);
@@ -109,13 +169,16 @@ pub(crate) async fn resume_kept<T: Transport, S: RunStore, C: Clock>(
 
 #[cfg(test)]
 mod tests {
-    use super::{NO_IMPORTER, RefusingSink, ResumeReport, client, resume_kept};
+    use super::{
+        FALLBACK_INTERRUPTED, NO_IMPORTER, RefusingSink, ResumeReport, client, resume_kept,
+    };
     use brightdata::runs::{
         AccessOutcome, Caps, Clock, GateError, GateState, NewRun, RunError, RunId, RunMode,
         RunRecord, RunScope, RunSink, RunStatus, RunStore, RunUpdate, Runner, StoreError, Timing,
     };
     use brightdata::{BrightDataClient, TargetUrl, UnlockedPage};
     use http_guard::{Redactor, Secret};
+    use std::sync::Mutex;
 
     const NOW: i64 = 1_790_000_000_000;
 
@@ -241,10 +304,120 @@ mod tests {
         assert_eq!(
             report,
             ResumeReport {
-                finished: 0,
-                active: 0,
-                refused: 2
+                refused: 2,
+                ..ResumeReport::default()
             }
         );
+    }
+
+    /// In-memory runs; the connector is enabled and the kill switch off.
+    struct MemStore(Mutex<Vec<RunRecord>>);
+
+    fn running(id: i64, tenant: &str, job: &str) -> RunRecord {
+        RunRecord {
+            id: RunId(id),
+            scope: RunScope::new(tenant, job).unwrap(),
+            ..kept_run()
+        }
+    }
+
+    impl RunStore for MemStore {
+        async fn gate_state(&self, _: &RunScope, _: i64) -> Result<GateState, StoreError> {
+            Ok(GateState {
+                connector_enabled: true,
+                ..GateState::default()
+            })
+        }
+        async fn insert_run_capped(
+            &self,
+            _: &NewRun,
+            _: i64,
+            _: &Caps,
+        ) -> Result<RunId, StoreError> {
+            Err(StoreError::Storage("unused".to_owned()))
+        }
+        async fn update_if_active(
+            &self,
+            id: RunId,
+            update: &RunUpdate,
+            now_ms: i64,
+        ) -> Result<bool, StoreError> {
+            let mut runs = self.0.lock().unwrap();
+            let Some(run) = runs
+                .iter_mut()
+                .find(|run| run.id == id && run.status.is_active())
+            else {
+                return Ok(false);
+            };
+            if let Some(status) = update.status {
+                run.status = status;
+            }
+            if let Some(message) = &update.error_message {
+                run.error_message.clone_from(message);
+            }
+            run.updated_at_ms = now_ms;
+            Ok(true)
+        }
+        async fn load_run(&self, id: RunId) -> Result<Option<RunRecord>, StoreError> {
+            let runs = self.0.lock().unwrap();
+            Ok(runs.iter().find(|run| run.id == id).cloned())
+        }
+        async fn active_runs(&self) -> Result<Vec<RunRecord>, StoreError> {
+            let runs = self.0.lock().unwrap();
+            Ok(runs
+                .iter()
+                .filter(|run| run.status.is_active())
+                .cloned()
+                .collect())
+        }
+        async fn kill_switch_on(&self) -> Result<bool, StoreError> {
+            Ok(false)
+        }
+        async fn record_access(
+            &self,
+            _: RunId,
+            _: &str,
+            _: AccessOutcome,
+        ) -> Result<(), StoreError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn kept_amazon_fallback_runs_fail_instead_of_resuming() {
+        let store = MemStore(Mutex::new(vec![
+            running(1, amazon::FALLBACK_TENANT, amazon::FALLBACK_JOB),
+            running(2, "tenant-1", "amazon"),
+        ]));
+        let runner: Runner<'_, BrightDataClient, _, _> = Runner {
+            transport: None,
+            store: &store,
+            clock: &FixedClock,
+            timing: Timing::default(),
+            caps: Caps::default(),
+            robots: None,
+        };
+        let redactor = Redactor::default();
+        let report = resume_kept(&runner, &[RunId(1), RunId(2)], &RefusingSink, &redactor).await;
+        // Run 2 is still resumed (and, without a key, refused by the gate).
+        assert_eq!(
+            report,
+            ResumeReport {
+                refused: 1,
+                abandoned: 1,
+                ..ResumeReport::default()
+            }
+        );
+        let fallback = store.load_run(RunId(1)).await.unwrap().unwrap();
+        assert_eq!(fallback.status, RunStatus::Failed);
+        assert_eq!(fallback.error_message, FALLBACK_INTERRUPTED);
+        let active: Vec<RunId> = store
+            .active_runs()
+            .await
+            .unwrap()
+            .iter()
+            .map(|run| run.id)
+            .collect();
+        assert_eq!(active, vec![RunId(2)]);
     }
 }

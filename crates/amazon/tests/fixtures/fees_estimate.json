@@ -1,0 +1,37 @@
+{
+  "payload": {
+    "FeesEstimateResult": {
+      "Status": "Success",
+      "FeesEstimate": {
+        "TotalFeesEstimate": { "CurrencyCode": "MXN", "Amount": 254.85 },
+        "TimeOfFeesEstimation": "2026-10-19T18:00:00Z",
+        "FeeDetailList": [
+          {
+            "FeeType": "ReferralFee",
+            "FeeAmount": { "CurrencyCode": "MXN", "Amount": 194.85 },
+            "FeePromotion": { "CurrencyCode": "MXN", "Amount": 0.0 },
+            "FinalFee": { "CurrencyCode": "MXN", "Amount": 194.85 }
+          },
+          {
+            "FeeType": "FBAFees",
+            "FeeAmount": { "CurrencyCode": "MXN", "Amount": 60.0 },
+            "FinalFee": { "CurrencyCode": "MXN", "Amount": 60.0 }
+          },
+          {
+            "FeeType": "VariableClosingFee",
+            "FeeAmount": { "CurrencyCode": "MXN", "Amount": 0.0 },
+            "FinalFee": { "CurrencyCode": "MXN", "Amount": 0.0 }
+          }
+        ]
+      },
+      "FeesEstimateIdentifier": {
+        "MarketplaceId": "A1AM78C64UM0Y8",
+        "IdType": "ASIN",
+        "IdValue": "B0SYNTH001",
+        "IsAmazonFulfilled": true,
+        "SellerInputIdentifier": "mex-scrape-B0SYNTH001",
+        "PriceToEstimateFees": { "ListingPrice": { "CurrencyCode": "MXN", "Amount": 1299.0 } }
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use domain::{Availability, Gtin, Offer, PriceMxn, RetailerId, RetailerSku, UnixMillis};
+use domain::{Asin, Availability, Gtin, Offer, PriceMxn, RetailerId, RetailerSku, UnixMillis};
 
 /// Boxed future returned by async port methods.
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -68,41 +68,160 @@ pub trait OfferSource: Send + Sync {
     ) -> PortFuture<'a, Result<Offer, OfferSourceError>>;
 }
 
-/// An Amazon MX listing found for a GTIN. Preliminary: the Amazon phase may
-/// refine these fields.
+/// Which provider an Amazon result came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AmazonDataSource {
+    /// Amazon's Selling Partner API (primary).
+    SpApi,
+    /// Bright Data's Amazon dataset (fallback).
+    BrightData,
+}
+
+impl AmazonDataSource {
+    /// Stable lowercase name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SpApi => "sp_api",
+            Self::BrightData => "bright_data",
+        }
+    }
+}
+
+/// A best-sellers rank of a catalog item in one category.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AmazonListing {
-    /// Amazon Standard Identification Number.
-    pub asin: String,
-    /// Listing title.
+pub struct SalesRank {
+    /// Category name as Amazon shows it.
+    pub category: String,
+    /// Rank in that category (1 is best).
+    pub rank: u32,
+}
+
+/// One Amazon.com.mx catalog item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogItem {
+    /// Amazon product id.
+    pub asin: Asin,
+    /// Item title.
     pub title: String,
-    /// Current buy-box price, when one is shown.
-    pub price_mxn: Option<PriceMxn>,
-    /// When the listing was read.
+    /// Brand, when known.
+    pub brand: Option<String>,
+    /// Image URLs, main image first.
+    pub images: Vec<String>,
+    /// Sales ranks, best (lowest) first.
+    pub sales_ranks: Vec<SalesRank>,
+}
+
+/// Catalog items found by one lookup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogResult {
+    /// Matching items (possibly none).
+    pub items: Vec<CatalogItem>,
+    /// Provider that answered.
+    pub source: AmazonDataSource,
+    /// When the data was read.
+    pub fetched_at: UnixMillis,
+}
+
+/// Offer prices for one ASIN on Amazon.com.mx (new condition).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OfferSummary {
+    /// Buy-box landed price, when there is a buy box.
+    pub buy_box_mxn: Option<PriceMxn>,
+    /// Lowest landed price of a new offer.
+    pub lowest_new_mxn: Option<PriceMxn>,
+    /// Number of new offers.
+    pub offer_count: u32,
+    /// Provider that answered.
+    pub source: AmazonDataSource,
+    /// When the data was read.
+    pub fetched_at: UnixMillis,
+}
+
+/// Who ships the order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Fulfillment {
+    /// Fulfilled by Amazon.
+    Fba,
+    /// Shipped by the seller.
+    Merchant,
+}
+
+/// One fee in a [`FeeEstimate`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeeDetail {
+    /// Amazon fee type, e.g. `ReferralFee`.
+    pub fee_type: String,
+    /// Final fee amount.
+    pub amount_mxn: PriceMxn,
+}
+
+/// Estimated Amazon selling fees for one ASIN at one price, in MXN.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeeEstimate {
+    /// Sum of all fees.
+    pub total_mxn: PriceMxn,
+    /// Individual fees.
+    pub details: Vec<FeeDetail>,
+    /// Provider that answered.
+    pub source: AmazonDataSource,
+    /// When the data was read.
     pub fetched_at: UnixMillis,
 }
 
 /// Why an [`AmazonSource`] call failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum AmazonSourceError {
+    /// No credentials are configured for this source.
+    #[error("Amazon source not configured")]
+    NotConfigured,
+    /// The credentials were rejected or lack the needed role.
+    #[error("Amazon source not authorized")]
+    NotAuthorized,
+    /// The input (keyword, price) is not acceptable.
+    #[error("invalid Amazon lookup input")]
+    InvalidInput,
+    /// This source cannot answer this kind of lookup.
+    #[error("lookup not supported by this Amazon source")]
+    Unsupported,
     /// Amazon could not be reached or refused the request.
     #[error("Amazon source unavailable")]
     Unavailable,
     /// Amazon asked the caller to slow down.
     #[error("Amazon rate limit reached")]
     RateLimited,
-    /// The response could not be understood.
+    /// The response could not be understood (or was not in MXN).
     #[error("Amazon response could not be parsed")]
     ParseFailed,
 }
 
-/// Amazon MX catalog lookups. Interface only until the Amazon phase.
+/// Amazon.com.mx catalog, offer and fee lookups. All money is MXN.
 pub trait AmazonSource: Send + Sync {
-    /// The listing for `gtin`, or `None` when Amazon has none.
-    fn listing_by_gtin<'a>(
+    /// Catalog items carrying barcode `gtin`.
+    fn catalog_by_gtin<'a>(
         &'a self,
         gtin: &'a Gtin,
-    ) -> PortFuture<'a, Result<Option<AmazonListing>, AmazonSourceError>>;
+    ) -> PortFuture<'a, Result<CatalogResult, AmazonSourceError>>;
+
+    /// Catalog items matching `keywords`.
+    fn catalog_by_keyword<'a>(
+        &'a self,
+        keywords: &'a str,
+    ) -> PortFuture<'a, Result<CatalogResult, AmazonSourceError>>;
+
+    /// New-condition offer prices for `asin`.
+    fn offers<'a>(
+        &'a self,
+        asin: &'a Asin,
+    ) -> PortFuture<'a, Result<OfferSummary, AmazonSourceError>>;
+
+    /// Estimated selling fees for `asin` sold at `price`.
+    fn fees<'a>(
+        &'a self,
+        asin: &'a Asin,
+        price: PriceMxn,
+        fulfillment: Fulfillment,
+    ) -> PortFuture<'a, Result<FeeEstimate, AmazonSourceError>>;
 }
 
 /// Why a repository call failed. Carries no detail: storage errors may

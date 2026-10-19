@@ -1,10 +1,13 @@
 //! Background job runner for mex-scrape (price fetching, matching, history).
 //!
 //! Loads server secrets at start-up and, when `DATABASE_URL` is set,
-//! recovers interrupted Bright Data runs and resumes the kept ones; then
-//! exits: jobs will be added in later phases.
+//! recovers interrupted Bright Data runs and resumes the kept ones. It also
+//! builds the Amazon.com.mx source (SP-API, Bright Data fallback) and logs
+//! which parts are configured; then exits: jobs will be added in later
+//! phases.
 
 mod access_metrics;
+mod amazon_source;
 mod brightdata_resume;
 mod brightdata_store;
 mod secrets;
@@ -23,6 +26,7 @@ use db::brightdata_runs::DriverLock;
 use http_guard::Redactor;
 use retailers::RetailerOfferSource;
 
+use crate::amazon_source::{amazon_source, driver_fallback};
 use crate::brightdata_resume::{RefusingSink, client, resume_kept};
 use crate::brightdata_store::PgRunStore;
 use crate::secrets::ServerSecrets;
@@ -61,20 +65,35 @@ async fn run(secrets: &ServerSecrets) -> anyhow::Result<()> {
     );
     // Errors name the variable only, never the value.
     let database = DatabaseUrl::from_env().context("loading DATABASE_URL")?;
+    let redactor = secrets.redactor();
     // Held until the worker exits: this process drives Bright Data runs.
-    let _driver = match &database {
+    let (_driver, _amazon) = match &database {
         Some(url) => {
-            let redactor = secrets.redactor();
             let (api_key, unlocker_zone, browser_zone) = secrets.brightdata();
             // `None` without credentials: resumes then fail the key gate.
-            let client = client(api_key, unlocker_zone, browser_zone, &redactor);
-            recover_brightdata_runs(url, client.as_ref(), &redactor)
+            let client = client(api_key, unlocker_zone, browser_zone, &redactor).map(Arc::new);
+            let db_error = |error: anyhow::Error| {
+                anyhow::anyhow!(url.redactor().sanitize(&format!("{error:#}")))
+            };
+            let pool = db::connect(url)
                 .await
-                .map_err(|error| anyhow::anyhow!(url.redactor().sanitize(&format!("{error:#}"))))?
+                .context("failed to connect to Postgres")
+                .map_err(db_error)?;
+            let driver = recover_brightdata_runs(url, pool.clone(), client.as_deref(), &redactor)
+                .await
+                .map_err(db_error)?;
+            // The Amazon fallback runs through the same gated, durable runs,
+            // so only the driver-lock holder may start them.
+            let store = Arc::new(PgRunStore::new(pool, url.redactor().clone()));
+            let fallback = driver_fallback(driver.is_some(), client, store);
+            let (amazon, _) = amazon_source(secrets.spapi(), fallback, &redactor);
+            (driver, amazon)
         }
         None => {
             tracing::info!("DATABASE_URL is not set; Bright Data run recovery skipped");
-            None
+            let (amazon, _) =
+                amazon_source::<BrightDataClient, PgRunStore>(secrets.spapi(), None, &redactor);
+            (None, amazon)
         }
     };
     tracing::info!(
@@ -110,12 +129,10 @@ fn robots_checker() -> Option<RobotsChecker> {
 /// its runs are live.
 async fn recover_brightdata_runs(
     url: &DatabaseUrl,
+    pool: db::PgPool,
     transport: Option<&BrightDataClient>,
     redactor: &Redactor,
 ) -> anyhow::Result<Option<DriverLock>> {
-    let pool = db::connect(url)
-        .await
-        .context("failed to connect to Postgres")?;
     let Some(lock) = db::brightdata_runs::try_driver_lock(&pool)
         .await
         .context("taking the Bright Data driver lock")?
@@ -149,6 +166,7 @@ async fn recover_brightdata_runs(
             finished = resumed.finished,
             active = resumed.active,
             refused = resumed.refused,
+            abandoned = resumed.abandoned,
             "Bright Data run resume finished"
         );
     }

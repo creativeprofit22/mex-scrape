@@ -1,0 +1,57 @@
+{
+  "payload": {
+    "ASIN": "B0SYNTH001",
+    "status": "Success",
+    "ItemCondition": "New",
+    "MarketplaceID": "A1AM78C64UM0Y8",
+    "Identifier": { "MarketplaceId": "A1AM78C64UM0Y8", "ItemCondition": "New", "ASIN": "B0SYNTH001" },
+    "Summary": {
+      "TotalOfferCount": 4,
+      "NumberOfOffers": [
+        { "condition": "new", "fulfillmentChannel": "Amazon", "OfferCount": 1 },
+        { "condition": "new", "fulfillmentChannel": "Merchant", "OfferCount": 2 },
+        { "condition": "used", "fulfillmentChannel": "Merchant", "OfferCount": 1 }
+      ],
+      "LowestPrices": [
+        {
+          "condition": "new", "fulfillmentChannel": "Amazon",
+          "LandedPrice": { "CurrencyCode": "MXN", "Amount": 1299.0 },
+          "ListingPrice": { "CurrencyCode": "MXN", "Amount": 1299.0 },
+          "Shipping": { "CurrencyCode": "MXN", "Amount": 0.0 }
+        },
+        {
+          "condition": "new", "fulfillmentChannel": "Merchant",
+          "LandedPrice": { "CurrencyCode": "MXN", "Amount": 1249.5 },
+          "ListingPrice": { "CurrencyCode": "MXN", "Amount": 1150.0 },
+          "Shipping": { "CurrencyCode": "MXN", "Amount": 99.5 }
+        },
+        {
+          "condition": "used", "fulfillmentChannel": "Merchant",
+          "LandedPrice": { "CurrencyCode": "MXN", "Amount": 900.0 },
+          "ListingPrice": { "CurrencyCode": "MXN", "Amount": 900.0 },
+          "Shipping": { "CurrencyCode": "MXN", "Amount": 0.0 }
+        }
+      ],
+      "BuyBoxPrices": [
+        {
+          "condition": "New",
+          "LandedPrice": { "CurrencyCode": "MXN", "Amount": 1299.0 },
+          "ListingPrice": { "CurrencyCode": "MXN", "Amount": 1299.0 },
+          "Shipping": { "CurrencyCode": "MXN", "Amount": 0.0 }
+        }
+      ],
+      "ListPrice": { "CurrencyCode": "MXN", "Amount": 1599.0 },
+      "SalesRankings": [{ "ProductCategoryId": "home_improvement_display_on_website", "Rank": 1520 }]
+    },
+    "Offers": [
+      {
+        "SubCondition": "new",
+        "SellerId": "ASYNTHSELLER01",
+        "ListingPrice": { "CurrencyCode": "MXN", "Amount": 1299.0 },
+        "Shipping": { "CurrencyCode": "MXN", "Amount": 0.0 },
+        "IsFulfilledByAmazon": true,
+        "IsBuyBoxWinner": true
+      }
+    ]
+  }
+}

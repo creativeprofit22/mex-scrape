@@ -1,6 +1,6 @@
 # 0003. Amazon SP-API primary, Bright Data fallback
 
-- Status: Accepted
+- Status: Accepted; superseded in part by [ADR 0010](0010-amazon-spapi-lwa-brightdata-dataset-fallback.md) (the fallback is the Bright Data Amazon dataset inside `amazon`, not a Web Unlocker page fetch orchestrated by `worker`)
 - Date: 2026-10-18
 
 ## Context

@@ -15,11 +15,12 @@ web (Next.js) ──HTTP/OpenAPI──▶ api ─┐
                     worker ──────────┘
 api, worker ─▶ matching ─▶ domain
 worker ─▶ retailers ─▶ brightdata ─▶ http-guard ─▶ internet
-worker ──────────────▶ brightdata   (run store + recovery; Amazon.com.mx fallback, ADR 0003)
-worker ─▶ amazon ─────────────────▶ http-guard ─▶ internet
+worker ──────────────▶ brightdata   (run store + recovery)
+worker ─▶ amazon ─────────────────▶ http-guard ─▶ internet   (SP-API, LWA tokens; ADR 0010)
+          amazon ─▶ brightdata                   (Amazon dataset fallback, ADR 0010)
 worker ─▶ http-guard                (Secret, Redactor: env secrets loaded at start-up)
 http-guard, db ─▶ secrets           (Secret, Redactor; db holds DATABASE_URL as a Secret)
-api, worker, db, retailers ─▶ app ─▶ domain   (use cases and ports, ADR 0009)
+api, worker, db, retailers, amazon ─▶ app ─▶ domain   (use cases and ports, ADR 0009)
 ```
 
 ## Layers
@@ -40,7 +41,7 @@ The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-arch
 ```
 
 - **domain**: entities and pure rules.
-- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `retailers::RetailerOfferSource`).
+- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `retailers::RetailerOfferSource`, `amazon::SpApiAmazonSource`, `amazon::BrightDataAmazonSource`).
 - **infrastructure**: adapters for Postgres, store pages, Amazon, outbound HTTP, Bright Data and secrets.
 - **entry points**: `api` and `worker` build adapters, inject them into use cases, and map results to HTTP or logs.
 - `brightdata` stays product-agnostic, outside the onion ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); `worker` bridges it.
@@ -60,7 +61,7 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 | `secrets` | lib | secret values and error redaction, no network code | [secrets.md](modules/secrets.md) |
 | `brightdata` | lib | product-agnostic Bright Data client (Web Unlocker + Datasets v3 + Browser API) with durable, capped runs ([ADR 0002](decisions/0002-brightdata-web-unlocker-fetch-layer.md), [ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md), [ADR 0007](decisions/0007-brightdata-browser-api.md), [ADR 0008](decisions/0008-browser-api-settle-blocking-category-listings.md)) | [brightdata.md](modules/brightdata.md) |
 | `retailers` | lib | Mexican store adapters: one `Retailer` per store parsing pages into `domain::Offer`, fixture sanitizer, parse-health alerts | [retailers.md](modules/retailers.md) |
-| `amazon` | lib | Amazon SP-API client ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md)) | [amazon.md](modules/amazon.md) |
+| `amazon` | lib | Amazon.com.mx data: SP-API client (LWA tokens, rate limits) plus the Bright Data Amazon-dataset fallback, both behind `app::ports::AmazonSource` ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md), [ADR 0010](decisions/0010-amazon-spapi-lwa-brightdata-dataset-fallback.md)) | [amazon.md](modules/amazon.md) |
 | `matching` | lib | product matching and ROI | [matching.md](modules/matching.md) |
 | `web` | Next.js app | Spanish UI; generated API client | [web.md](modules/web.md) |
 
@@ -76,7 +77,7 @@ Only the workspace dependencies listed here are allowed. `scripts/check_docs.py`
 | secrets | — |
 | http-guard | secrets |
 | brightdata | http-guard |
-| amazon | domain, app, http-guard |
+| amazon | domain, app, http-guard, brightdata |
 | retailers | domain, app, brightdata |
 | db | domain, app, secrets |
 | api | domain, app, db, matching, retailers |
