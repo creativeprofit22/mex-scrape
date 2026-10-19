@@ -7,7 +7,9 @@ Fails (exit 1) when a workspace crate:
 - is missing from the allowed-dependencies table in ``docs/ARCHITECTURE.md``,
 - depends on a workspace crate its allowed-dependencies row does not list.
 
-Also fails when ``domain`` has any workspace dependency, when the
+Also fails when ``domain`` has any workspace dependency, when ``app`` (the
+application layer, ADR 0009) depends on an infrastructure or entry-point
+crate or directly on a database, web-framework or HTTP client crate, when the
 allowed-dependencies table names a crate that does not exist, or when any
 crate other than ``http-guard`` depends directly on an HTTP or WebSocket
 client crate (all outbound calls must use ``http_guard::GuardedClient`` or
@@ -33,6 +35,23 @@ MODULE_MAP_HEADING = "## Module map"
 ALLOWED_HEADING = "## Allowed dependencies"
 DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
 PURE_CRATE = "domain"
+APP_CRATE = "app"
+# The application layer depends only on `domain` (ADR 0009): never on adapters
+# or entry points, nor on the I/O crates they wrap.
+APP_FORBIDDEN_WORKSPACE = frozenset(
+    {
+        "api",
+        "worker",
+        "db",
+        "retailers",
+        "amazon",
+        "http-guard",
+        "brightdata",
+        "secrets",
+        "matching",
+    }
+)
+APP_FORBIDDEN_EXTERNAL = frozenset({"sqlx", "axum", "hyper", "tower", "utoipa"})
 NONE_MARKERS = frozenset({"", "-", "—", "none"})
 HTTP_GUARD_CRATE = "http-guard"
 HTTP_GUARD_TEST_FEATURE = "test-support"
@@ -263,6 +282,22 @@ def _http_guard_errors(crate: Crate) -> list[str]:
     return errors
 
 
+def _app_errors(crate: Crate) -> list[str]:
+    """Rules that keep the ``app`` layer free of infrastructure (ADR 0009)."""
+    if crate.name != APP_CRATE:
+        return []
+    errors = [
+        f"{APP_CRATE}: depends on {dep}; the application layer may depend only on "
+        f"{PURE_CRATE} and non-I/O libraries (ADR 0009)"
+        for dep in sorted(crate.workspace_deps & APP_FORBIDDEN_WORKSPACE)
+    ]
+    errors.extend(
+        f"{APP_CRATE}: depends on {dep}; I/O and framework crates belong in adapters (ADR 0009)"
+        for dep in sorted(crate.direct_deps & (APP_FORBIDDEN_EXTERNAL | HTTP_CLIENT_CRATES))
+    )
+    return errors
+
+
 def check(root: Path) -> list[str]:
     """Return every docs problem found under ``root`` (empty means OK)."""
     crates = load_crates(root)
@@ -307,6 +342,7 @@ def check(root: Path) -> list[str]:
             deps = ", ".join(sorted(crate.workspace_deps))
             errors.append(f"{PURE_CRATE}: must not depend on workspace crates (found: {deps})")
         errors.extend(_http_guard_errors(crate))
+        errors.extend(_app_errors(crate))
 
     if (HTTP_GUARD_CRATE, HTTP_GUARD_TEST_FEATURE) in load_workspace_dep_features(root):
         errors.append(

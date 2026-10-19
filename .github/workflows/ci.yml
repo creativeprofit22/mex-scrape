@@ -46,9 +46,13 @@ jobs:
       # Fails if a crate lacks docs/modules/<crate>.md, is missing from
       # docs/ARCHITECTURE.md, or breaks the allowed-dependencies table; if a
       # crate other than http-guard depends directly on an HTTP client crate;
-      # or if domain has any workspace dependency.
+      # or if domain has any workspace dependency, or app depends on an
+      # infrastructure, entry-point, database, web-framework or HTTP crate.
       - name: Docs check
         run: uv run python scripts/check_docs.py
+
+      - name: Docs check tests
+        run: uv run python -m unittest discover -s scripts -p "test_*.py"
 
   rust:
     runs-on: ubuntu-latest

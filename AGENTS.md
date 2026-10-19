@@ -40,7 +40,8 @@ Layout, module map and allowed crate dependencies: [docs/ARCHITECTURE.md](docs/A
 
 ### Docs check
 
-- `uv run python scripts/check_docs.py` — fails if a crate lacks `docs/modules/<crate>.md`, is missing from `docs/ARCHITECTURE.md`, depends on a crate its allowed-dependencies row does not list, depends directly on an HTTP or WebSocket client crate (`reqwest`, `ureq`, `isahc`, `attohttpc`, `surf`, `tungstenite`, `tokio-tungstenite`) unless it is `http-guard`, or enables the `http-guard` feature `test-support` outside `[dev-dependencies]` (including via `[workspace.dependencies]`); also fails if `domain` has any workspace dependency.
+- `uv run python scripts/check_docs.py` — fails if a crate lacks `docs/modules/<crate>.md`, is missing from `docs/ARCHITECTURE.md`, depends on a crate its allowed-dependencies row does not list, depends directly on an HTTP or WebSocket client crate (`reqwest`, `ureq`, `isahc`, `attohttpc`, `surf`, `tungstenite`, `tokio-tungstenite`) unless it is `http-guard`, or enables the `http-guard` feature `test-support` outside `[dev-dependencies]` (including via `[workspace.dependencies]`); also fails if `domain` has any workspace dependency, or if `app` depends on an infrastructure or entry-point crate or directly on `sqlx`, `axum`, `hyper`, `tower`, `utoipa` or an HTTP client crate (ADR 0009).
+- Docs check tests: `uv run python -m unittest discover -s scripts -p "test_*.py"`
 
 ## Rules
 
