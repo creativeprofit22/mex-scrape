@@ -1,0 +1,20 @@
+# Local development services. Start with: docker compose up -d db
+services:
+  db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: mex
+      POSTGRES_PASSWORD: mex
+      POSTGRES_DB: mex_scrape
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mex -d mex_scrape"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  db-data:

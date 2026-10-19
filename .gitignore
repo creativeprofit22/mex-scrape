@@ -19,10 +19,18 @@ htmlcov/
 # Environment / secrets
 .env
 .env.*
+!.env.example
 
 # Generated transcripts (may contain private meeting data)
 transcript.txt
 *.transcript.txt
+
+# Rust
+target/
+
+# Web (Next.js)
+web/node_modules/
+web/.next/
 
 # OS / editor
 .DS_Store
