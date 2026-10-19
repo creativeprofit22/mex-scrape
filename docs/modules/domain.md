@@ -15,6 +15,7 @@ Core domain types and pure business logic (products, prices, stores). No I/O; ev
   - `RetailerSku`: trimmed, 1–100 chars, no control characters.
   - `Availability { InStock, OutOfStock, PreOrder, Unknown }` with `from_schema_org`.
   - `UnixMillis(i64)`: fetch time, same unit as `brightdata`'s `Clock::now_ms`.
+- `Asin`: Amazon product id, exactly 10 ASCII letters/digits (trimmed, upper-cased); errors as `AsinError`.
 
 ## Dependencies
 

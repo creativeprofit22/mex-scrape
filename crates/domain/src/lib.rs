@@ -3,8 +3,10 @@
 //! This crate performs no I/O and depends on no other workspace crate; every
 //! other crate may depend on it.
 
+mod amazon;
 mod offer;
 
+pub use amazon::{Asin, AsinError};
 pub use offer::{
     Availability, Gtin, Offer, OfferError, PriceMxn, RetailerId, RetailerSku, UnixMillis,
 };
