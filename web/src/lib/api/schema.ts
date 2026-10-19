@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/{asin}/price-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lowest, highest and average retailer price over 30, 90 and 365 days for
+         *     every retailer listing matched (accepted) to an Amazon product.
+         */
+        get: operations["product_price_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -46,6 +66,58 @@ export interface components {
         HealthResponse: {
             /** @description Always `"ok"` when the process is serving requests. */
             status: string;
+        };
+        /** @description Price windows for one retailer listing matched to the product. */
+        ListingPriceStatsResponse: {
+            /** @description Retailer id, e.g. `walmart_mx`. */
+            retailer: string;
+            /** @description The retailer's product id. */
+            retailer_sku: string;
+            /** @description 30, 90 and 365-day windows, shortest first. */
+            windows: components["schemas"]["PriceWindowResponse"][];
+        };
+        /** @description Price stats for an Amazon product across matched retailer listings. */
+        PriceStatsResponse: {
+            /**
+             * Format: int64
+             * @description Instant every window ends at (epoch milliseconds).
+             */
+            as_of_ms: number;
+            /** @description The Amazon product. */
+            asin: string;
+            /** @description One entry per accepted listing, sorted by retailer then SKU. */
+            listings: components["schemas"]["ListingPriceStatsResponse"][];
+        };
+        /**
+         * @description Low, high and average price over one window. Amounts are integer
+         *     centavos; they are absent when no in-stock price was observed.
+         */
+        PriceWindowResponse: {
+            /**
+             * Format: int64
+             * @description Mean price (rounded half up), in centavos.
+             */
+            average_centavos?: number | null;
+            /**
+             * Format: int32
+             * @description Window length in days (30, 90 or 365).
+             */
+            days: number;
+            /**
+             * Format: int64
+             * @description Highest price, in centavos.
+             */
+            high_centavos?: number | null;
+            /**
+             * Format: int64
+             * @description Lowest price, in centavos.
+             */
+            low_centavos?: number | null;
+            /**
+             * Format: int32
+             * @description Observations counted (out-of-stock prices are not counted).
+             */
+            observations: number;
         };
         /** @description Access outcomes for one retailer host. */
         RetailerAccessCounts: {
@@ -141,6 +213,50 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
+            };
+        };
+    };
+    product_price_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Amazon ASIN (10 letters or digits) */
+                asin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Price stats per listing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceStatsResponse"];
+                };
+            };
+            /** @description Not a valid ASIN */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Price history could not be read */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Price history is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

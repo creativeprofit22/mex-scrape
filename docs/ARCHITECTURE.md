@@ -32,7 +32,7 @@ The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-arch
 │ ┌ infrastructure (adapters): db, retailers, amazon,                 ┐ │
 │ │                            http-guard, brightdata, secrets        │ │
 │ │ ┌ app: use cases + ports (OfferSource, AmazonSource,           ┐  │ │
-│ │ │      PriceHistoryRepo, AccessCountsRepo, Clock)              │  │ │
+│ │ │      PriceHistoryRepo, MatchRepo, AccessCountsRepo, Clock)   │  │ │
 │ │ │ ┌ domain: entities and pure rules ┐                          │  │ │
 │ │ │ └─────────────────────────────────┘                          │  │ │
 │ │ └──────────────────────────────────────────────────────────────┘  │ │
@@ -41,7 +41,7 @@ The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-arch
 ```
 
 - **domain**: entities and pure rules.
-- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `retailers::RetailerOfferSource`, `amazon::SpApiAmazonSource`, `amazon::BrightDataAmazonSource`).
+- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `db::price_history::PgPriceHistory`, `db::price_history::PgMatches`, `retailers::RetailerOfferSource`, `amazon::SpApiAmazonSource`, `amazon::BrightDataAmazonSource`).
 - **infrastructure**: adapters for Postgres, store pages, Amazon, outbound HTTP, Bright Data and secrets.
 - **entry points**: `api` and `worker` build adapters, inject them into use cases, and map results to HTTP or logs.
 - `brightdata` stays product-agnostic, outside the onion ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); `worker` bridges it.
@@ -62,7 +62,7 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 | `brightdata` | lib | product-agnostic Bright Data client (Web Unlocker + Datasets v3 + Browser API) with durable, capped runs ([ADR 0002](decisions/0002-brightdata-web-unlocker-fetch-layer.md), [ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md), [ADR 0007](decisions/0007-brightdata-browser-api.md), [ADR 0008](decisions/0008-browser-api-settle-blocking-category-listings.md)) | [brightdata.md](modules/brightdata.md) |
 | `retailers` | lib | Mexican store adapters: one `Retailer` per store parsing pages into `domain::Offer`, fixture sanitizer, parse-health alerts | [retailers.md](modules/retailers.md) |
 | `amazon` | lib | Amazon.com.mx data: SP-API client (LWA tokens, rate limits) plus the Bright Data Amazon-dataset fallback, both behind `app::ports::AmazonSource` ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md), [ADR 0010](decisions/0010-amazon-spapi-lwa-brightdata-dataset-fallback.md)) | [amazon.md](modules/amazon.md) |
-| `matching` | lib | product matching and ROI | [matching.md](modules/matching.md) |
+| `matching` | lib | product matching: retailer offer → Amazon ASIN (GTIN first, then brand + title confidence); ROI is in `domain` | [matching.md](modules/matching.md) |
 | `web` | Next.js app | Spanish UI; generated API client | [web.md](modules/web.md) |
 
 ## Allowed dependencies

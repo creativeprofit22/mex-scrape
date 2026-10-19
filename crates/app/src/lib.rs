@@ -9,11 +9,14 @@
 pub mod access;
 pub mod amazon;
 pub mod ports;
+pub mod price_stats;
 
 pub use access::{AccessReport, AccessReportError, HostAccessReport};
 pub use amazon::FallbackAmazonSource;
 pub use ports::{
     AccessCountsRepo, AccessTotals, AmazonDataSource, AmazonSource, AmazonSourceError, CatalogItem,
-    CatalogResult, Clock, FeeDetail, FeeEstimate, Fulfillment, HostAccess, OfferSource,
+    CatalogResult, Clock, FeeDetail, FeeEstimate, Fulfillment, HostAccess, MatchRepo, OfferSource,
     OfferSourceError, OfferSummary, PortFuture, PriceHistoryRepo, PricePoint, RepoError, SalesRank,
+    UpsertOutcome,
 };
+pub use price_stats::{ListingPriceStats, PriceStats, PriceStatsError, ProductPriceStats};

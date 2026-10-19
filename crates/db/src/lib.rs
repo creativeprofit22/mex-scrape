@@ -5,6 +5,7 @@
 
 pub mod access;
 pub mod brightdata_runs;
+pub mod price_history;
 
 use std::ffi::OsString;
 use std::str::FromStr as _;

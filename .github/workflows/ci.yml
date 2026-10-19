@@ -122,6 +122,9 @@ jobs:
       - name: Database tests
         run: cargo test --locked -p db --test brightdata_runs -- --ignored
 
+      - name: Price history tests
+        run: cargo test --locked -p db --test price_history -- --ignored
+
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15

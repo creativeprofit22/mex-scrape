@@ -11,7 +11,8 @@ The application layer ([ADR 0009](../decisions/0009-onion-architecture.md)): use
   - `Clock { now() -> UnixMillis }`. Injected so use cases stay deterministic.
   - `OfferSource`: `retailer_for_host(host) -> Option<RetailerId>` (sync registry lookup), `search(&RetailerId, query) -> Vec<Offer>`, `product(&RetailerId, &RetailerSku) -> Offer`. Errors: `OfferSourceError { UnknownRetailer, InvalidQuery, InvalidSku, SearchUnavailable, BlockedNeedsKyc, FetchFailed, ParseFailed, Unavailable }`. Implemented by `retailers::RetailerOfferSource`.
   - `AmazonSource`: Amazon.com.mx lookups, all money in MXN. `catalog_by_gtin(&Gtin)` and `catalog_by_keyword(&str)` return `CatalogResult { items: Vec<CatalogItem>, source, fetched_at }`, where `CatalogItem { asin: Asin, title, brand, images, sales_ranks: Vec<SalesRank { category, rank }> }`. `offers(&Asin) -> OfferSummary { buy_box_mxn, lowest_new_mxn, offer_count, source, fetched_at }`. `fees(&Asin, PriceMxn, Fulfillment { Fba, Merchant }) -> FeeEstimate { total_mxn, details: Vec<FeeDetail { fee_type, amount_mxn }>, source, fetched_at }`. `source` is `AmazonDataSource { SpApi, BrightData }`. Errors: `AmazonSourceError { NotConfigured, NotAuthorized, InvalidInput, Unsupported, Unavailable, RateLimited, ParseFailed }`. Implemented by `amazon::SpApiAmazonSource` and `amazon::BrightDataAmazonSource`.
-  - `PriceHistoryRepo`: `record(&Offer)`, `history(&RetailerId, &RetailerSku, since) -> Vec<PricePoint>`. `PricePoint { price_mxn, list_price_mxn, availability, observed_at }`. Interface only, until the matching phase.
+  - `PriceHistoryRepo`: `record(&Offer)`, `history(&RetailerId, &RetailerSku, since) -> Vec<PricePoint>`. `PricePoint { price_mxn, list_price_mxn, availability, observed_at }`, sorted by `observed_at`. Implemented by `db::price_history::PgPriceHistory`.
+  - `MatchRepo`: `upsert(&ProductMatch) -> UpsertOutcome` (`Written`, or `KeptRejected` when a stored `rejected` match was kept and nothing was written — a reviewer's rejection is never overwritten), `accepted_listings(&Asin) -> Vec<(RetailerId, RetailerSku)>` (sorted by retailer, then SKU). Implemented by `db::price_history::PgMatches`.
   - `AccessCountsRepo`: `counts_by_host() -> Vec<HostAccess>`. `HostAccess { host, totals: AccessTotals }`, `AccessTotals { ok, blocked_needs_kyc, skipped_robots, failed }` (with saturating `add`). Implemented by `db::access::PgAccessCounts`.
   - `RepoError { Unavailable }`: the repository error.
   - None of the error enums carry detail strings, so adapter errors (which may echo URLs or credentials) never cross a port.
@@ -22,6 +23,7 @@ The application layer ([ADR 0009](../decisions/0009-onion-architecture.md)): use
     - `per_retailer()` returns a `BTreeMap<String, AccessTotals>` summed per label and sorted.
     - Both fail with `AccessReportError::Storage` when the counts cannot be read.
     - Unit tests use hand-written fakes, with no database.
+  - `price_stats::PriceStats::new(Arc<dyn PriceHistoryRepo>, Arc<dyn MatchRepo>, Arc<dyn Clock>)`, the Keepa-style price stats. `for_product(&Asin)` returns `ProductPriceStats { asin, as_of, listings: Vec<ListingPriceStats { retailer, retailer_sku, windows: Vec<PriceWindow> }> }`: for each listing with an accepted match to the ASIN, it reads the last 365 days of history and computes `domain::window_stats` for 30, 90 and 365 days at `Clock::now()`. Fails with `PriceStatsError::Storage`. Tests use fixed fixture data and a fixed clock.
 
 ## Dependencies
 

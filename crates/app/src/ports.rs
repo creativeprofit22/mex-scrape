@@ -8,7 +8,9 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use domain::{Asin, Availability, Gtin, Offer, PriceMxn, RetailerId, RetailerSku, UnixMillis};
+use domain::{
+    Asin, Availability, Gtin, Offer, PriceMxn, ProductMatch, RetailerId, RetailerSku, UnixMillis,
+};
 
 /// Boxed future returned by async port methods.
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -247,8 +249,8 @@ pub struct PricePoint {
     pub observed_at: UnixMillis,
 }
 
-/// Stored price history of retailer offers. Interface only until the
-/// matching phase.
+/// Stored, append-only price history of retailer offers (implemented by
+/// `db::price_history::PgPriceHistory`).
 pub trait PriceHistoryRepo: Send + Sync {
     /// Records the offer's current price.
     fn record<'a>(&'a self, offer: &'a Offer) -> PortFuture<'a, Result<(), RepoError>>;
@@ -260,6 +262,34 @@ pub trait PriceHistoryRepo: Send + Sync {
         sku: &'a RetailerSku,
         since: UnixMillis,
     ) -> PortFuture<'a, Result<Vec<PricePoint>, RepoError>>;
+}
+
+/// What [`MatchRepo::upsert`] did with the match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpsertOutcome {
+    /// The match was inserted or replaced the stored one.
+    Written,
+    /// A reviewer had rejected the listing's match; the rejection was kept
+    /// unchanged and the new match was not stored.
+    KeptRejected,
+}
+
+/// Stored links between retailer listings and Amazon products.
+pub trait MatchRepo: Send + Sync {
+    /// Inserts or replaces the listing's match. A stored `rejected` match
+    /// (set by a reviewer) is kept unchanged and
+    /// [`UpsertOutcome::KeptRejected`] is returned.
+    fn upsert<'a>(
+        &'a self,
+        m: &'a ProductMatch,
+    ) -> PortFuture<'a, Result<UpsertOutcome, RepoError>>;
+
+    /// Listings with an accepted match to `asin`, sorted by retailer then
+    /// SKU.
+    fn accepted_listings<'a>(
+        &'a self,
+        asin: &'a Asin,
+    ) -> PortFuture<'a, Result<Vec<(RetailerId, RetailerSku)>, RepoError>>;
 }
 
 /// Page-access outcome totals (Bright Data fetches).

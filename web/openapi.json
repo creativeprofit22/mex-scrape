@@ -62,6 +62,44 @@
           }
         }
       }
+    },
+    "/products/{asin}/price-stats": {
+      "get": {
+        "summary": "Lowest, highest and average retailer price over 30, 90 and 365 days for\nevery retailer listing matched (accepted) to an Amazon product.",
+        "operationId": "product_price_stats",
+        "parameters": [
+          {
+            "name": "asin",
+            "in": "path",
+            "description": "Amazon ASIN (10 letters or digits)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Price stats per listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceStatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid ASIN"
+          },
+          "500": {
+            "description": "Price history could not be read"
+          },
+          "503": {
+            "description": "Price history is not configured"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -76,6 +114,105 @@
           "status": {
             "type": "string",
             "description": "Always `\"ok\"` when the process is serving requests."
+          }
+        }
+      },
+      "ListingPriceStatsResponse": {
+        "type": "object",
+        "description": "Price windows for one retailer listing matched to the product.",
+        "required": [
+          "retailer",
+          "retailer_sku",
+          "windows"
+        ],
+        "properties": {
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id, e.g. `walmart_mx`."
+          },
+          "retailer_sku": {
+            "type": "string",
+            "description": "The retailer's product id."
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceWindowResponse"
+            },
+            "description": "30, 90 and 365-day windows, shortest first."
+          }
+        }
+      },
+      "PriceStatsResponse": {
+        "type": "object",
+        "description": "Price stats for an Amazon product across matched retailer listings.",
+        "required": [
+          "asin",
+          "as_of_ms",
+          "listings"
+        ],
+        "properties": {
+          "as_of_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Instant every window ends at (epoch milliseconds)."
+          },
+          "asin": {
+            "type": "string",
+            "description": "The Amazon product."
+          },
+          "listings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingPriceStatsResponse"
+            },
+            "description": "One entry per accepted listing, sorted by retailer then SKU."
+          }
+        }
+      },
+      "PriceWindowResponse": {
+        "type": "object",
+        "description": "Low, high and average price over one window. Amounts are integer\ncentavos; they are absent when no in-stock price was observed.",
+        "required": [
+          "days",
+          "observations"
+        ],
+        "properties": {
+          "average_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Mean price (rounded half up), in centavos."
+          },
+          "days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Window length in days (30, 90 or 365).",
+            "minimum": 0
+          },
+          "high_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Highest price, in centavos."
+          },
+          "low_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Lowest price, in centavos."
+          },
+          "observations": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Observations counted (out-of-stock prices are not counted).",
+            "minimum": 0
           }
         }
       },

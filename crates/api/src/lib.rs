@@ -4,8 +4,12 @@
 //! client is generated from it (`npm --prefix web run gen:api`).
 
 mod admin;
+mod products;
 
 pub use admin::{AdminState, MIN_TOKEN_LEN, RetailerAccessCounts};
+pub use products::{
+    ListingPriceStatsResponse, PriceStatsResponse, PriceWindowResponse, ProductsState,
+};
 
 use axum::{Json, Router, routing::get};
 use serde::Serialize;
@@ -65,8 +69,8 @@ async fn health() -> Json<HealthResponse> {
     })
 }
 
-/// Builds the application router and its OpenAPI spec, with the admin
-/// routes disabled (they answer 503).
+/// Builds the application router and its OpenAPI spec, with the admin and
+/// product routes disabled (they answer 503).
 ///
 /// The returned router also serves the spec at [`OPENAPI_PATH`].
 pub fn router() -> (Router, utoipa::openapi::OpenApi) {
@@ -75,10 +79,22 @@ pub fn router() -> (Router, utoipa::openapi::OpenApi) {
 
 /// Like [`router`], with the admin routes configured by `admin`.
 pub fn router_with(admin: AdminState) -> (Router, utoipa::openapi::OpenApi) {
+    router_with_state(admin, ProductsState::disabled())
+}
+
+/// Like [`router`], with the admin and product routes configured.
+pub fn router_with_state(
+    admin: AdminState,
+    products: ProductsState,
+) -> (Router, utoipa::openapi::OpenApi) {
+    let product_routes = OpenApiRouter::new()
+        .routes(routes!(products::product_price_stats))
+        .with_state(products);
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(health))
         .routes(routes!(admin::brightdata_access))
         .with_state(admin)
+        .merge(product_routes)
         .split_for_parts();
     let spec = api.clone();
     let router = router.route(
