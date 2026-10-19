@@ -14,4 +14,4 @@ ignore = ["D203", "D213"]
 [tool.pyright]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"
-include = ["fathom_transcript.py"]
+include = ["fathom_transcript.py", "scripts"]
