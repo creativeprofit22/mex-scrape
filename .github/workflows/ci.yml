@@ -44,7 +44,9 @@ jobs:
         run: uvx pyright@1.1.414
 
       # Fails if a crate lacks docs/modules/<crate>.md, is missing from
-      # docs/ARCHITECTURE.md, or breaks the allowed-dependencies table.
+      # docs/ARCHITECTURE.md, or breaks the allowed-dependencies table; if a
+      # crate other than http-guard depends directly on an HTTP client crate;
+      # or if domain has any workspace dependency.
       - name: Docs check
         run: uv run python scripts/check_docs.py
 

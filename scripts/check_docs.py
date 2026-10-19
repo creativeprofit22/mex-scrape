@@ -7,8 +7,14 @@ Fails (exit 1) when a workspace crate:
 - is missing from the allowed-dependencies table in ``docs/ARCHITECTURE.md``,
 - depends on a workspace crate its allowed-dependencies row does not list.
 
-Also fails when ``domain`` has any workspace dependency, or when the
-allowed-dependencies table names a crate that does not exist.
+Also fails when ``domain`` has any workspace dependency, when the
+allowed-dependencies table names a crate that does not exist, or when any
+crate other than ``http-guard`` depends directly on an HTTP client crate
+(all outbound calls must use ``http_guard::GuardedClient``), or when the
+``http-guard`` feature ``test-support`` (which disables the transport policy)
+is enabled outside ``[dev-dependencies]``: in a member's ``[dependencies]`` or
+``[build-dependencies]`` (target-specific included) or in
+``[workspace.dependencies]``.
 
 Usage: ``uv run python scripts/check_docs.py [--root PATH]``
 """
@@ -27,6 +33,9 @@ ALLOWED_HEADING = "## Allowed dependencies"
 DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
 PURE_CRATE = "domain"
 NONE_MARKERS = frozenset({"", "-", "—", "none"})
+HTTP_GUARD_CRATE = "http-guard"
+HTTP_GUARD_TEST_FEATURE = "test-support"
+HTTP_CLIENT_CRATES = frozenset({"reqwest", "ureq", "isahc", "attohttpc", "surf"})
 
 
 class DocsCheckError(Exception):
@@ -35,11 +44,19 @@ class DocsCheckError(Exception):
 
 @dataclass(frozen=True)
 class Crate:
-    """A workspace member and the workspace crates it depends on."""
+    """A workspace member and its dependencies.
+
+    Holds the workspace crates it depends on, every package it depends on
+    directly (renames resolved), and ``(package, feature)`` for every feature
+    it enables in ``[dependencies]`` or ``[build-dependencies]`` (including
+    target-specific ones).
+    """
 
     name: str
     manifest: Path
     workspace_deps: frozenset[str]
+    direct_deps: frozenset[str]
+    non_dev_features: frozenset[tuple[str, str]]
 
 
 def _as_table(value: object, where: str) -> dict[str, object]:
@@ -85,19 +102,58 @@ def _member_dirs(root: Path, workspace: dict[str, object]) -> list[Path]:
     return sorted(dirs)
 
 
-def _dependency_tables(manifest: dict[str, object], where: str) -> list[dict[str, object]]:
-    tables = [_as_table(manifest[name], where) for name in DEP_TABLES if name in manifest]
+def _dependency_tables(
+    manifest: dict[str, object], where: str
+) -> list[tuple[str, dict[str, object]]]:
+    """Return ``(table_kind, table)`` pairs, ``table_kind`` being one of ``DEP_TABLES``.
+
+    Target-specific tables (``[target.<cfg>.dependencies]``) keep their kind.
+    """
+    tables = [(name, _as_table(manifest[name], where)) for name in DEP_TABLES if name in manifest]
     targets = _as_table(manifest.get("target", {}), where)
     for target_name in sorted(targets):
         target = _as_table(targets[target_name], where)
-        tables.extend(_as_table(target[name], where) for name in DEP_TABLES if name in target)
+        tables.extend(
+            (name, _as_table(target[name], where)) for name in DEP_TABLES if name in target
+        )
     return tables
 
 
-def load_crates(root: Path) -> list[Crate]:
-    """Read every workspace member and its workspace dependencies."""
+def _spec_features(spec: dict[str, object], where: str) -> list[str]:
+    return _as_str_list(spec.get("features", []), f"{where} features")
+
+
+def _spec_package(key: str, spec: dict[str, object]) -> str:
+    renamed = spec.get("package")
+    return renamed if isinstance(renamed, str) else key
+
+
+def load_workspace_dep_features(root: Path) -> frozenset[tuple[str, str]]:
+    """Return ``(package, feature)`` for every feature in ``[workspace.dependencies]``.
+
+    Members inheriting an entry with ``workspace = true`` get these features in
+    every table, including ``[dependencies]``.
+    """
     root_manifest = _load_toml(root / "Cargo.toml")
     workspace = _as_table(root_manifest.get("workspace", {}), "Cargo.toml [workspace]")
+    where = "Cargo.toml [workspace.dependencies]"
+    found: set[tuple[str, str]] = set()
+    for key, spec in _as_table(workspace.get("dependencies", {}), where).items():
+        if isinstance(spec, str):
+            continue
+        table = _as_table(spec, f"{where} {key}")
+        package_name = _spec_package(key, table)
+        found.update((package_name, f) for f in _spec_features(table, f"{where} {key}"))
+    return frozenset(found)
+
+
+def load_crates(root: Path) -> list[Crate]:
+    """Read every workspace member and its direct dependencies."""
+    root_manifest = _load_toml(root / "Cargo.toml")
+    workspace = _as_table(root_manifest.get("workspace", {}), "Cargo.toml [workspace]")
+    workspace_deps = _as_table(
+        workspace.get("dependencies", {}), "Cargo.toml [workspace.dependencies]"
+    )
     raw: list[tuple[str, Path, dict[str, object]]] = []
     for member in _member_dirs(root, workspace):
         manifest_path = member / "Cargo.toml"
@@ -112,17 +168,41 @@ def load_crates(root: Path) -> list[Crate]:
     names = {name for name, _, _ in raw}
     crates: list[Crate] = []
     for name, manifest_path, manifest in raw:
+        where = str(manifest_path)
         deps: set[str] = set()
-        for table in _dependency_tables(manifest, str(manifest_path)):
+        direct: set[str] = set()
+        non_dev_features: set[tuple[str, str]] = set()
+        for kind, table in _dependency_tables(manifest, where):
             for key, spec in table.items():
                 package_name = key
+                features: list[str] = []
                 if not isinstance(spec, str):  # table form, may rename via `package`
-                    renamed = _as_table(spec, str(manifest_path)).get("package")
-                    if isinstance(renamed, str):
-                        package_name = renamed
-                if package_name in names:
+                    spec_table = _as_table(spec, where)
+                    package_name = _spec_package(key, spec_table)
+                    inherited = workspace_deps.get(key)
+                    if spec_table.get("workspace") is True and not (
+                        inherited is None or isinstance(inherited, str)
+                    ):
+                        # `package` lives on the [workspace.dependencies] entry.
+                        package_name = _spec_package(
+                            key, _as_table(inherited, f"Cargo.toml [workspace.dependencies] {key}")
+                        )
+                    features = _spec_features(spec_table, f"{where} {kind}.{key}")
+                direct.add(package_name)
+                if kind != "dev-dependencies":
+                    non_dev_features.update((package_name, f) for f in features)
+                # A self dev-dependency only enables test features.
+                if package_name in names and package_name != name:
                     deps.add(package_name)
-        crates.append(Crate(name, manifest_path, frozenset(deps)))
+        crates.append(
+            Crate(
+                name,
+                manifest_path,
+                frozenset(deps),
+                frozenset(direct),
+                frozenset(non_dev_features),
+            )
+        )
     return sorted(crates, key=lambda c: c.name)
 
 
@@ -160,6 +240,23 @@ def _allowed_table(text: str, where: str) -> dict[str, frozenset[str]]:
         deps = {_cell_name(t) for t in targets.split(",")}
         allowed[name] = frozenset(d for d in deps if d.lower() not in NONE_MARKERS)
     return allowed
+
+
+def _http_guard_errors(crate: Crate) -> list[str]:
+    """Rules that keep every outbound call behind the ``http-guard`` transport policy."""
+    errors: list[str] = []
+    if crate.name != HTTP_GUARD_CRATE:
+        errors.extend(
+            f"{crate.name}: depends on HTTP client crate {dep}; "
+            f"only {HTTP_GUARD_CRATE} may (use http_guard::GuardedClient)"
+            for dep in sorted(crate.direct_deps & HTTP_CLIENT_CRATES)
+        )
+    if (HTTP_GUARD_CRATE, HTTP_GUARD_TEST_FEATURE) in crate.non_dev_features:
+        errors.append(
+            f"{crate.name}: enables {HTTP_GUARD_CRATE} feature {HTTP_GUARD_TEST_FEATURE} "
+            "outside [dev-dependencies]; it disables the transport policy"
+        )
+    return errors
 
 
 def check(root: Path) -> list[str]:
@@ -205,6 +302,14 @@ def check(root: Path) -> list[str]:
         if crate.name == PURE_CRATE and crate.workspace_deps:
             deps = ", ".join(sorted(crate.workspace_deps))
             errors.append(f"{PURE_CRATE}: must not depend on workspace crates (found: {deps})")
+        errors.extend(_http_guard_errors(crate))
+
+    if (HTTP_GUARD_CRATE, HTTP_GUARD_TEST_FEATURE) in load_workspace_dep_features(root):
+        errors.append(
+            f"Cargo.toml: [workspace.dependencies].{HTTP_GUARD_CRATE} enables feature "
+            f"{HTTP_GUARD_TEST_FEATURE}; members inherit it in [dependencies] and it disables "
+            "the transport policy"
+        )
 
     for name in sorted(allowed):
         if name not in names:

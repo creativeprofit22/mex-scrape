@@ -40,7 +40,7 @@ Layout, module map and allowed crate dependencies: [docs/ARCHITECTURE.md](docs/A
 
 ### Docs check
 
-- `uv run python scripts/check_docs.py` — fails if a crate lacks `docs/modules/<crate>.md`, is missing from `docs/ARCHITECTURE.md`, or depends on a crate its allowed-dependencies row does not list.
+- `uv run python scripts/check_docs.py` — fails if a crate lacks `docs/modules/<crate>.md`, is missing from `docs/ARCHITECTURE.md`, depends on a crate its allowed-dependencies row does not list, depends directly on an HTTP client crate (`reqwest`, `ureq`, `isahc`, `attohttpc`, `surf`) unless it is `http-guard`, or enables the `http-guard` feature `test-support` outside `[dev-dependencies]` (including via `[workspace.dependencies]`); also fails if `domain` has any workspace dependency.
 
 ## Rules
 
