@@ -67,6 +67,15 @@ impl ServerSecrets {
         ]
     }
 
+    /// `BRIGHTDATA_API_KEY` and `BRIGHTDATA_UNLOCKER_ZONE`, for the client
+    /// config.
+    pub(crate) fn brightdata(&self) -> (Option<Secret>, Option<Secret>) {
+        (
+            self.brightdata_api_key.clone(),
+            self.brightdata_unlocker_zone.clone(),
+        )
+    }
+
     /// Which variables are set, in fixed order; safe to log.
     pub(crate) fn presence(&self) -> [(&'static str, bool); 6] {
         self.entries()

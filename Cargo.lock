@@ -2549,11 +2549,13 @@ version = "0.1.0"
 dependencies = [
  "amazon",
  "anyhow",
+ "brightdata",
  "db",
  "domain",
  "http-guard",
  "matching",
  "retailers",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
