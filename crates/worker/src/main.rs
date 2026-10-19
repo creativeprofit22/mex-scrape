@@ -10,6 +10,7 @@ mod access_metrics;
 mod amazon_source;
 mod brightdata_resume;
 mod brightdata_store;
+mod offer_matching;
 mod secrets;
 
 use std::sync::Arc;
