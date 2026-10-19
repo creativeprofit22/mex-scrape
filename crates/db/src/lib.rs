@@ -3,12 +3,17 @@
 //! Owns every table in the database. Queries use runtime-checked
 //! `sqlx::query` calls so builds never need a live database.
 
+pub mod brightdata_runs;
+
 use std::ffi::OsString;
 use std::str::FromStr as _;
 
 use secrets::{Redactor, Secret, SecretError};
 use sqlx::migrate::Migrator;
-use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+/// The connection pool type returned by [`connect`].
+pub use sqlx::postgres::PgPool;
 
 /// Embedded migrations from `crates/db/migrations`.
 pub static MIGRATOR: Migrator = sqlx::migrate!("./migrations");

@@ -114,6 +114,10 @@ jobs:
       - name: Re-run migrations (must be a no-op)
         run: cargo run --locked -p db --bin migrate
 
+      # Schema tests (ignored by default because they need Postgres).
+      - name: Database tests
+        run: cargo test --locked -p db --test brightdata_runs -- --ignored
+
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
