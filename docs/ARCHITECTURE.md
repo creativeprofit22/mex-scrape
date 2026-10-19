@@ -17,6 +17,8 @@ api, worker ─▶ matching ─▶ domain
 worker ─▶ retailers ─▶ brightdata ─▶ http-guard ─▶ internet
 worker ──────────────▶ brightdata   (Amazon.com.mx page fallback, ADR 0003)
 worker ─▶ amazon ─────────────────▶ http-guard ─▶ internet
+worker ─▶ http-guard                (Secret, Redactor: env secrets loaded at start-up)
+http-guard, db ─▶ secrets           (Secret, Redactor; db holds DATABASE_URL as a Secret)
 ```
 
 ## Module map
@@ -30,6 +32,7 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 | `domain` | lib | pure types and business logic, no I/O | [domain.md](modules/domain.md) |
 | `db` | lib + bin `migrate` | sqlx Postgres access and migrations | [db.md](modules/db.md) |
 | `http-guard` | lib | hardened outbound HTTP | [http-guard.md](modules/http-guard.md) |
+| `secrets` | lib | secret values and error redaction, no network code | [secrets.md](modules/secrets.md) |
 | `brightdata` | lib | Bright Data Web Unlocker client ([ADR 0002](decisions/0002-brightdata-web-unlocker-fetch-layer.md)) | [brightdata.md](modules/brightdata.md) |
 | `retailers` | lib | Mexican store adapters | [retailers.md](modules/retailers.md) |
 | `amazon` | lib | Amazon SP-API client ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md)) | [amazon.md](modules/amazon.md) |
@@ -44,20 +47,22 @@ Only the workspace dependencies listed here are allowed. `scripts/check_docs.py`
 |---|---|
 | domain | — |
 | matching | domain |
-| http-guard | — |
+| secrets | — |
+| http-guard | secrets |
 | brightdata | domain, http-guard |
 | amazon | domain, http-guard |
 | retailers | domain, brightdata |
-| db | domain |
+| db | domain, secrets |
 | api | domain, db, matching |
-| worker | domain, db, matching, retailers, amazon, brightdata |
+| worker | domain, db, matching, retailers, amazon, brightdata, http-guard |
 
 Rules:
 
 - `domain` depends on no other workspace crate and does no I/O.
 - Adapters (`http-guard`, `brightdata`, `retailers`, `amazon`) never depend on `api`, `worker` or `db`.
 - Only `api` and `worker` are entry points; nothing depends on them.
-- All outbound network calls go through `http-guard`.
+- All outbound network calls go through `http-guard`. No crate other than `http-guard` may depend on `reqwest` (or any other HTTP client crate) or build its own HTTP client; every outbound call uses `http_guard::GuardedClient` ([policy](modules/http-guard.md)). `scripts/check_docs.py` enforces this.
+- Secrets (Bright Data key and zone names, SP-API credentials, model provider keys, and the `DATABASE_URL` with its password) are `secrets::Secret` values (re-exported as `http_guard::Secret`), loaded from the environment at start-up. They are never logged, serialized into API responses or stored in DB rows, and every error message passes through a `secrets::Redactor` before it is logged or returned (`db::DatabaseUrl::redactor` for database errors). `api` holds no provider secrets.
 - `web` reaches the backend only over HTTP via the client generated from the `api` OpenAPI spec (`npm --prefix web run gen:api`).
 
 ## Keeping docs current

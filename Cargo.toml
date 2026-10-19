@@ -19,14 +19,17 @@ domain = { path = "crates/domain" }
 http-guard = { path = "crates/http-guard" }
 matching = { path = "crates/matching" }
 retailers = { path = "crates/retailers" }
+secrets = { path = "crates/secrets" }
 
 # External crates (exact versions resolved in Cargo.lock)
 anyhow = "1.0.104"
 axum = "0.8.9"
 http-body-util = "0.1.5"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sqlx = { version = "0.9.0", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "migrate", "macros"] }
+thiserror = "2.0.21"
 tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "net", "signal"] }
 tower = { version = "0.5.3", features = ["util"] }
 tracing = "0.1.44"

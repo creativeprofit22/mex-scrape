@@ -9,4 +9,19 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Enables `TransportPolicy::LOOPBACK_TEST` (plain http to loopback fake
+# servers). Only ever enable it from `[dev-dependencies]`.
+test-support = []
+
 [dependencies]
+reqwest.workspace = true
+secrets.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+http-guard = { workspace = true, features = ["test-support"] }
+tokio = { workspace = true, features = ["io-util", "time"] }

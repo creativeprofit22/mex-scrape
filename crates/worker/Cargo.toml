@@ -11,8 +11,10 @@ workspace = true
 
 [dependencies]
 amazon.workspace = true
+anyhow.workspace = true
 db.workspace = true
 domain.workspace = true
+http-guard.workspace = true
 matching.workspace = true
 retailers.workspace = true
 tokio.workspace = true

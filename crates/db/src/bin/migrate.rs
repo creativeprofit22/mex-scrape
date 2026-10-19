@@ -1,6 +1,7 @@
 //! Applies pending sqlx migrations to the database in `DATABASE_URL`.
 
 use anyhow::Context as _;
+use db::DatabaseUrl;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -10,8 +11,20 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let url = std::env::var("DATABASE_URL").context("DATABASE_URL is not set")?;
-    let pool = db::connect(&url)
+    // Errors here name the variable only, never the value.
+    let url = DatabaseUrl::from_env()
+        .context("loading DATABASE_URL")?
+        .context("DATABASE_URL is not set")?;
+    if let Err(error) = run(&url).await {
+        let message = url.redactor().sanitize(&format!("{error:#}"));
+        tracing::error!(error = %message, "migration failed");
+        return Err(anyhow::anyhow!(message));
+    }
+    Ok(())
+}
+
+async fn run(url: &DatabaseUrl) -> anyhow::Result<()> {
+    let pool = db::connect(url)
         .await
         .context("failed to connect to Postgres")?;
     db::migrate(&pool).await.context("migration failed")?;
