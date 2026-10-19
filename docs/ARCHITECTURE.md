@@ -15,7 +15,7 @@ web (Next.js) ──HTTP/OpenAPI──▶ api ─┐
                     worker ──────────┘
 api, worker ─▶ matching ─▶ domain
 worker ─▶ retailers ─▶ brightdata ─▶ http-guard ─▶ internet
-worker ──────────────▶ brightdata   (Amazon.com.mx page fallback, ADR 0003)
+worker ──────────────▶ brightdata   (run store + recovery; Amazon.com.mx fallback, ADR 0003)
 worker ─▶ amazon ─────────────────▶ http-guard ─▶ internet
 worker ─▶ http-guard                (Secret, Redactor: env secrets loaded at start-up)
 http-guard, db ─▶ secrets           (Secret, Redactor; db holds DATABASE_URL as a Secret)
@@ -33,7 +33,7 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 | `db` | lib + bin `migrate` | sqlx Postgres access and migrations | [db.md](modules/db.md) |
 | `http-guard` | lib | hardened outbound HTTP | [http-guard.md](modules/http-guard.md) |
 | `secrets` | lib | secret values and error redaction, no network code | [secrets.md](modules/secrets.md) |
-| `brightdata` | lib | Bright Data Web Unlocker client ([ADR 0002](decisions/0002-brightdata-web-unlocker-fetch-layer.md)) | [brightdata.md](modules/brightdata.md) |
+| `brightdata` | lib | product-agnostic Bright Data client (Web Unlocker + Datasets v3) with durable, capped runs ([ADR 0002](decisions/0002-brightdata-web-unlocker-fetch-layer.md), [ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)) | [brightdata.md](modules/brightdata.md) |
 | `retailers` | lib | Mexican store adapters | [retailers.md](modules/retailers.md) |
 | `amazon` | lib | Amazon SP-API client ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md)) | [amazon.md](modules/amazon.md) |
 | `matching` | lib | product matching and ROI | [matching.md](modules/matching.md) |
@@ -49,7 +49,7 @@ Only the workspace dependencies listed here are allowed. `scripts/check_docs.py`
 | matching | domain |
 | secrets | — |
 | http-guard | secrets |
-| brightdata | domain, http-guard |
+| brightdata | http-guard |
 | amazon | domain, http-guard |
 | retailers | domain, brightdata |
 | db | domain, secrets |
@@ -59,6 +59,7 @@ Only the workspace dependencies listed here are allowed. `scripts/check_docs.py`
 Rules:
 
 - `domain` depends on no other workspace crate and does no I/O.
+- `brightdata` depends on no mex-scrape domain crate, so other projects can adopt it ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); its run tables live in `db` and `worker` bridges them.
 - Adapters (`http-guard`, `brightdata`, `retailers`, `amazon`) never depend on `api`, `worker` or `db`.
 - Only `api` and `worker` are entry points; nothing depends on them.
 - All outbound network calls go through `http-guard`. No crate other than `http-guard` may depend on `reqwest` (or any other HTTP client crate) or build its own HTTP client; every outbound call uses `http_guard::GuardedClient` ([policy](modules/http-guard.md)). `scripts/check_docs.py` enforces this.

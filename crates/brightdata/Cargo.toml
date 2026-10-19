@@ -9,6 +9,15 @@ publish.workspace = true
 [lints]
 workspace = true
 
+# Product-agnostic: no mex-scrape domain crates (ADR 0006), so other
+# projects can adopt this crate. All HTTP goes through http-guard.
 [dependencies]
-domain.workspace = true
 http-guard.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time", "sync"] }
+
+[dev-dependencies]
+http-guard = { workspace = true, features = ["test-support"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync", "test-util"] }
