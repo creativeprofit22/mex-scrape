@@ -4,6 +4,7 @@
 //! client is generated from it (`npm --prefix web run gen:api`).
 
 mod admin;
+pub mod assistant;
 pub mod auth;
 mod products;
 mod ratelimit;
@@ -11,6 +12,17 @@ mod roi;
 mod searches;
 
 pub use admin::{AdminState, MIN_TOKEN_LEN, RetailerAccessCounts};
+pub use assistant::grant::{GrantKey, MIN_GRANT_KEY_BYTES};
+pub use assistant::internal::{
+    AgentOfferResponse, AgentOffersResponse, AgentPriceHistoryResponse, AgentSuggestionRequest,
+    AgentUsageRequest, AgentUsageResponse, GRANT_HEADER,
+};
+pub use assistant::sidecar::{SidecarConfigError, SidecarEngine};
+pub use assistant::{
+    AgentAuth, AssistantDeps, AssistantState, ChatMessageRequest, ChatRequest, ChatResponse,
+    MIN_SERVICE_TOKEN_LEN, MatchDecisionRequest, MatchDecisionResponse, MatchSuggestionResponse,
+    TokenUsageResponse,
+};
 pub use auth::{
     AccountsState, CSRF_HEADER, CsrfResponse, ErrorResponse, LocaleRequest, MeResponse,
     OnboardingRequest, PgSessionStore, SESSION_COOKIE, SessionConfig, SessionResponse,
@@ -54,6 +66,13 @@ pub const SESSION_SCHEME: &str = "session_cookie";
 /// Name of the security scheme for the `X-CSRF-Token` header.
 pub const CSRF_SCHEME: &str = "csrf_token";
 
+/// Name of the security scheme for the sidecar's service bearer token
+/// (`AGENT_SERVICE_TOKEN`).
+pub const AGENT_SERVICE_SCHEME: &str = "agent_service";
+
+/// Name of the security scheme for the per-chat `X-Agent-Grant` header.
+pub const AGENT_GRANT_SCHEME: &str = "agent_grant";
+
 #[derive(OpenApi)]
 #[openapi(
     info(
@@ -83,6 +102,14 @@ impl Modify for SecurityAddon {
             CSRF_SCHEME,
             SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("X-CSRF-Token"))),
         );
+        components.add_security_scheme(
+            AGENT_SERVICE_SCHEME,
+            SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()),
+        );
+        components.add_security_scheme(
+            AGENT_GRANT_SCHEME,
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("X-Agent-Grant"))),
+        );
     }
 }
 
@@ -99,6 +126,8 @@ pub struct ApiConfig {
     pub accounts: AccountsState,
     /// Per-plan and per-IP quotas on the user routes.
     pub rate_limits: RateLimits,
+    /// Assistant chat, match decisions and the sidecar's tool routes.
+    pub assistant: AssistantState,
 }
 
 impl ApiConfig {
@@ -111,6 +140,7 @@ impl ApiConfig {
             searches: SearchesState::disabled(),
             accounts: AccountsState::disabled(),
             rate_limits: RateLimits::defaults(),
+            assistant: AssistantState::disabled(),
         }
     }
 }
@@ -180,7 +210,13 @@ fn user_routes(config: &ApiConfig) -> OpenApiRouter {
                 .routes(routes!(products::product_price_history))
                 .with_state(config.products.clone()),
         )
-        .merge(OpenApiRouter::new().routes(routes!(roi::calculate_roi)));
+        .merge(OpenApiRouter::new().routes(routes!(roi::calculate_roi)))
+        .merge(
+            OpenApiRouter::new()
+                .routes(routes!(assistant::assistant_chat))
+                .routes(routes!(assistant::decide_match))
+                .with_state(config.assistant.clone()),
+        );
     let Some(accounts) = config.accounts.inner.as_deref() else {
         return routes.layer(middleware::from_fn(unavailable));
     };
@@ -210,6 +246,22 @@ fn user_routes(config: &ApiConfig) -> OpenApiRouter {
         .layer(auth_layer)
 }
 
+/// The sidecar's tool routes, outside the session layers, behind the
+/// service bearer and grant check (ADR 0013).
+fn agent_routes(config: &ApiConfig) -> OpenApiRouter {
+    OpenApiRouter::new()
+        .routes(routes!(assistant::internal::agent_offers))
+        .routes(routes!(assistant::internal::agent_price_history))
+        .routes(routes!(assistant::internal::agent_roi))
+        .routes(routes!(assistant::internal::agent_suggest_match))
+        .routes(routes!(assistant::internal::agent_usage))
+        .layer(middleware::from_fn_with_state(
+            config.assistant.clone(),
+            assistant::internal::agent_guard,
+        ))
+        .with_state(config.assistant.clone())
+}
+
 /// Builds the router and spec from `config`. The router also serves the
 /// spec at [`OPENAPI_PATH`].
 pub fn build(config: ApiConfig) -> (Router, utoipa::openapi::OpenApi) {
@@ -218,6 +270,7 @@ pub fn build(config: ApiConfig) -> (Router, utoipa::openapi::OpenApi) {
         .routes(routes!(admin::brightdata_access))
         .with_state(config.admin.clone())
         .merge(user_routes(&config))
+        .merge(agent_routes(&config))
         .split_for_parts();
     let spec = api.clone();
     let router = router.route(

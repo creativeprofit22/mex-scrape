@@ -7,6 +7,7 @@ It is a monorepo:
 - **Rust backend** — a Cargo workspace in `crates/` (decision: [ADR 0001](decisions/0001-rust-backend-nextjs-web.md)).
 - **Web app** — Next.js in `web/`, talking to the backend only through the OpenAPI contract.
 - **Postgres** — schema owned by the `db` crate; local instance from `compose.yaml`.
+- **Assistant sidecar** — a Node 22 service in `services/agent` running gg-agent headless; its tools only call the `api` ([ADR 0004](decisions/0004-gg-agent-sidecar-for-ai.md), [ADR 0013](decisions/0013-assistant-sidecar-interface.md)).
 - **`fathom_transcript.py`** — standalone Python helper, unrelated to the app.
 
 ```
@@ -19,6 +20,8 @@ worker ──────────────▶ brightdata   (run store + r
 worker ─▶ amazon ─────────────────▶ http-guard ─▶ internet   (SP-API, LWA tokens; ADR 0010)
           amazon ─▶ brightdata                   (Amazon dataset fallback, ADR 0010)
 worker ─▶ http-guard                (Secret, Redactor: env secrets loaded at start-up)
+api ─▶ http-guard ─▶ agent (services/agent, Node) ─▶ model provider   (chat proxy, private_service policy; ADR 0013)
+       agent ──tools──▶ api /internal/agent/*    (service bearer + per-chat grant; no db, Bright Data or SP-API)
 http-guard, db ─▶ secrets           (Secret, Redactor; db holds DATABASE_URL as a Secret)
 api, worker, db, retailers, amazon ─▶ app ─▶ domain   (use cases and ports, ADR 0009)
 ```
@@ -33,7 +36,8 @@ The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-arch
 │ │                            http-guard, brightdata, secrets        │ │
 │ │ ┌ app: use cases + ports (OfferSource, AmazonSource,           ┐  │ │
 │ │ │      PriceHistoryRepo, MatchRepo, AccessCountsRepo, Clock,   │  │ │
-│ │ │      RequestBudget, SearchRepo, UserRepo, PasswordHasher)    │  │ │
+│ │ │      RequestBudget, SearchRepo, UserRepo, PasswordHasher,    │  │ │
+│ │ │      MatchDecisionRepo, AgentUsageRepo, AssistantEngine)     │  │ │
 │ │ │ ┌ domain: entities and pure rules ┐                          │  │ │
 │ │ │ └─────────────────────────────────┘                          │  │ │
 │ │ └──────────────────────────────────────────────────────────────┘  │ │
@@ -42,7 +46,7 @@ The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-arch
 ```
 
 - **domain**: entities and pure rules.
-- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `db::price_history::PgPriceHistory`, `db::price_history::PgMatches`, `db::searches::PgSearches`, `db::usage::PgRequestBudget`, `db::users::PgUsers`, `api::auth::hasher::Argon2Hasher`, `retailers::RetailerOfferSource`, `amazon::SpApiAmazonSource`, `amazon::BrightDataAmazonSource`).
+- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `db::price_history::PgPriceHistory`, `db::price_history::PgMatches`, `db::searches::PgSearches`, `db::usage::PgRequestBudget`, `db::users::PgUsers`, `db::assistant::{PgMatchDecisions, PgAgentUsage}`, `api::auth::hasher::Argon2Hasher`, `api::SidecarEngine`, `retailers::RetailerOfferSource`, `amazon::SpApiAmazonSource`, `amazon::BrightDataAmazonSource`).
 - **infrastructure**: adapters for Postgres, store pages, Amazon, outbound HTTP, Bright Data and secrets.
 - **entry points**: `api` and `worker` build adapters, inject them into use cases, and map results to HTTP or logs.
 - `brightdata` stays product-agnostic, outside the onion ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); `worker` bridges it.
@@ -66,6 +70,14 @@ Slow and paid work runs as durable background jobs in the `worker` ([ADR 0011](d
 - User routes are rate limited per plan (signed in, by user id) or per client IP (signed out), with `tower_governor`; 429 carries `Retry-After`.
 - The web app serves `/es` (default) and `/en`. All UI text comes from two message catalogs that a lint step keeps in sync. Playwright tests with axe run against a database seeded by `db`'s `seed_e2e`.
 
+## AI assistant
+
+[ADR 0013](decisions/0013-assistant-sidecar-interface.md); details in [agent.md](modules/agent.md) and [api.md](modules/api.md):
+
+- `POST /assistant/chat` (session, CSRF, plan rate limit) checks the tenant's daily token budget, mints a 120 s HMAC grant for the chat and calls the sidecar. The sidecar runs gg-agent with `maxTurns`, per-tool timeouts, a run timeout and an `AbortSignal` tied to the client disconnecting, and stops when the budget is spent.
+- Its four tools (`search_offers`, `get_price_history`, `compute_roi`, `resolve_match`) call `/internal/agent/*`, which take the tenant only from the grant. "Tracked products" are the listings in the user's own searches of the last 90 days. Nothing starts a paid search.
+- Tie-breaks are propose-then-confirm: the agent stores a suggestion for a `needs_review` match, and the user's `POST /matches/decisions` records a per-tenant decision with who decided. Decisions change only that tenant's search results and price stats/series; the global `offer_matches` table is untouched.
+
 ## Module map
 
 Each module has a page in [`docs/modules/`](modules/) describing its purpose, public API, dependencies and the tables it owns.
@@ -83,6 +95,7 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 | `retailers` | lib | Mexican store adapters: one `Retailer` per store parsing pages into `domain::Offer`, fixture sanitizer, parse-health alerts | [retailers.md](modules/retailers.md) |
 | `amazon` | lib | Amazon.com.mx data: SP-API client (LWA tokens, rate limits) plus the Bright Data Amazon-dataset fallback, both behind `app::ports::AmazonSource` ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md), [ADR 0010](decisions/0010-amazon-spapi-lwa-brightdata-dataset-fallback.md)) | [amazon.md](modules/amazon.md) |
 | `matching` | lib | product matching: retailer offer → Amazon ASIN (GTIN first, then brand + title confidence); ROI is in `domain` | [matching.md](modules/matching.md) |
+| `agent` | Node 22 service (`services/agent`) | headless gg-agent sidecar: assistant chat, zod tools that only call the `api` ([ADR 0004](decisions/0004-gg-agent-sidecar-for-ai.md), [ADR 0013](decisions/0013-assistant-sidecar-interface.md)) | [agent.md](modules/agent.md) |
 | `web` | Next.js app | Spanish-first UI with an English toggle (`/es`, `/en`), Playwright + axe e2e tests; generated API client | [web.md](modules/web.md) |
 
 ## Allowed dependencies
@@ -100,7 +113,7 @@ Only the workspace dependencies listed here are allowed. `scripts/check_docs.py`
 | amazon | domain, app, http-guard, brightdata |
 | retailers | domain, app, brightdata |
 | db | domain, app, secrets |
-| api | domain, app, db, matching, retailers |
+| api | domain, app, db, http-guard, matching, retailers |
 | worker | domain, app, db, matching, retailers, amazon, brightdata, http-guard |
 
 Rules:
@@ -110,9 +123,9 @@ Rules:
 - `brightdata` depends on no mex-scrape domain crate, so other projects can adopt it ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); its run tables live in `db` and `worker` bridges them.
 - Adapters (`http-guard`, `brightdata`, `retailers`, `amazon`) never depend on `api`, `worker` or `db`.
 - Only `api` and `worker` are entry points; nothing depends on them.
-- All outbound network calls go through `http-guard`. No crate other than `http-guard` may depend on `reqwest`, `tungstenite`/`tokio-tungstenite` (or any other HTTP or WebSocket client crate) or build its own client; every outbound call uses `http_guard::GuardedClient` or, for the Bright Data Browser API only, `http_guard::GuardedWebSocket` ([policy](modules/http-guard.md), [ADR 0007](decisions/0007-brightdata-browser-api.md)). `scripts/check_docs.py` enforces this.
-- Secrets (Bright Data key and zone names, SP-API credentials, model provider keys, and the `DATABASE_URL` with its password) are `secrets::Secret` values (re-exported as `http_guard::Secret`), loaded from the environment at start-up. They are never logged, serialized into API responses or stored in DB rows, and every error message passes through a `secrets::Redactor` before it is logged or returned (`db::DatabaseUrl::redactor` for database errors). `api` holds no provider secrets.
-- `web` reaches the backend only over HTTP via the client generated from the `api` OpenAPI spec (`npm --prefix web run gen:api`).
+- All outbound network calls go through `http-guard`. No crate other than `http-guard` may depend on `reqwest`, `tungstenite`/`tokio-tungstenite` (or any other HTTP or WebSocket client crate) or build its own client; every outbound call uses `http_guard::GuardedClient` or, for the Bright Data Browser API only, `http_guard::GuardedWebSocket` ([policy](modules/http-guard.md), [ADR 0007](decisions/0007-brightdata-browser-api.md)). `scripts/check_docs.py` enforces this. Calls are public HTTPS only, with one opt-in exception: `TransportPolicy::private_service(port)` (plain http to an allowlisted host name on one port, still no link-local/metadata addresses), used only by the api's client for the assistant sidecar ([ADR 0013](decisions/0013-assistant-sidecar-interface.md)).
+- Secrets (Bright Data key and zone names, SP-API credentials, model provider keys, and the `DATABASE_URL` with its password) are `secrets::Secret` values (re-exported as `http_guard::Secret`), loaded from the environment at start-up. They are never logged, serialized into API responses or stored in DB rows, and every error message passes through a `secrets::Redactor` before it is logged or returned (`db::DatabaseUrl::redactor` for database errors). `api` holds no provider secrets; the model provider key lives only in the assistant sidecar, and the api holds only the sidecar's service token and grant key.
+- `web` reaches the backend only over HTTP via the client generated from the `api` OpenAPI spec (`npm --prefix web run gen:api`). The `agent` sidecar likewise reaches only the api's `/internal/agent/*` routes, with types generated from the same spec.
 
 ## Keeping docs current
 

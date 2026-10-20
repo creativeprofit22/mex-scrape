@@ -61,6 +61,16 @@ ADR 0012; used by `app::account` and `db::users`.
 - `low` / `high` are the minimum and maximum price; `average` is the arithmetic mean rounded half up to the centavo. All three are `None` when the window has no samples (`observations = 0`).
 - Retention: observations are kept indefinitely. The table `price_observations` is append-only (a trigger refuses UPDATE, DELETE and TRUNCATE; see [db.md](db.md)), and the stats read at most the last 365 days. Pruning old rows needs a new migration and an ADR.
 
+## Assistant
+
+[ADR 0013](../decisions/0013-assistant-sidecar-interface.md); used by `app::assistant`, `api::assistant` and `db::assistant`.
+
+- `ChatText::parse`: control characters removed (newlines and tabs kept), trimmed, 1–`MAX_CHAT_TEXT_CHARS` (2000) characters. `ChatMessage { role: ChatRole { User, Assistant }, text }`. `ChatHistory::parse(iter of (ChatRole, &str))`: 1–`MAX_CHAT_TURNS` (20) messages, the last from the user, at most `MAX_CHAT_TOTAL_CHARS` (16 000) characters in total; `ChatError` never echoes the text.
+- `clean_agent_reply`: strips control characters (`strip_control_chars`, keeps newlines and tabs), trims and cuts to `MAX_AGENT_REPLY_CHARS` (8000); the sidecar's answer is untrusted.
+- `MatchDecision { Accept, Reject }` with `as_str`/`parse` (`accept`/`reject`, matching the `match_suggestions`/`match_decisions` CHECKs).
+- `SuggestionReason::parse`: control characters removed, whitespace collapsed, 1–`MAX_SUGGESTION_REASON_CHARS` (300) characters.
+- `TokenCount` (non-negative `u64`, saturating), `TokenUsage { input, output }` with `total()`, and `AgentStop { Done, MaxTurns, TokenBudget }` (`done`, `max_turns`, `token_budget`).
+
 ## Dependencies
 
 - Workspace: none (enforced by `scripts/check_docs.py`).

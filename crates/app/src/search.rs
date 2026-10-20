@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use domain::{Memberships, SearchQuery, SearchQueryError, TenantId};
 
-use crate::ports::{SearchId, SearchRepo, SearchView};
+use crate::assistant::overlay_results;
+use crate::ports::{MatchDecisionRepo, SearchId, SearchRepo, SearchView};
 
 /// Why a search could not be started or read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -47,18 +48,22 @@ impl StartSearch {
 /// Reads a tenant's search with its outcomes and results.
 pub struct SearchResults {
     repo: Arc<dyn SearchRepo>,
+    decisions: Arc<dyn MatchDecisionRepo>,
 }
 
 impl SearchResults {
-    /// Reads searches through `repo`.
+    /// Reads searches through `repo`, applying the tenant's match
+    /// decisions from `decisions` (ADR 0013).
     #[must_use]
-    pub fn new(repo: Arc<dyn SearchRepo>) -> Self {
-        Self { repo }
+    pub fn new(repo: Arc<dyn SearchRepo>, decisions: Arc<dyn MatchDecisionRepo>) -> Self {
+        Self { repo, decisions }
     }
 
     /// The search `id` of `tenant`; `None` when unknown or owned by another
     /// tenant. Results that need a membership not in `memberships` are
-    /// removed and counted in [`SearchView::hidden_results`].
+    /// removed and counted in [`SearchView::hidden_results`]. The tenant's
+    /// own match decisions are applied: accept marks the match `accepted`,
+    /// reject removes it.
     ///
     /// # Errors
     /// [`SearchError::Storage`] if it could not be read.
@@ -73,14 +78,18 @@ impl SearchResults {
             .load(tenant, id)
             .await
             .map_err(|_| SearchError::Storage)?;
-        Ok(view.map(|mut v| {
-            let before = v.results.len();
-            v.results
-                .retain(|r| memberships.allows(r.membership_required, &r.retailer));
-            let hidden = before - v.results.len();
-            v.hidden_results = u32::try_from(hidden).unwrap_or(u32::MAX);
-            v
-        }))
+        let Some(mut v) = view else {
+            return Ok(None);
+        };
+        let before = v.results.len();
+        v.results
+            .retain(|r| memberships.allows(r.membership_required, &r.retailer));
+        let hidden = before - v.results.len();
+        v.hidden_results = u32::try_from(hidden).unwrap_or(u32::MAX);
+        overlay_results(self.decisions.as_ref(), tenant, &mut v.results)
+            .await
+            .map_err(|_| SearchError::Storage)?;
+        Ok(Some(v))
     }
 }
 
@@ -88,10 +97,17 @@ impl SearchResults {
 mod tests {
     use std::sync::Mutex;
 
-    use domain::{Availability, PriceMxn, RetailerId, RetailerSku, SearchStatus, UnixMillis};
+    use domain::{
+        Asin, Availability, Confidence, MatchDecision, MatchStatus, PriceMxn, RetailerId,
+        RetailerSku, SearchStatus, UnixMillis,
+    };
 
     use super::*;
-    use crate::ports::{PortFuture, RepoError, SearchResultView};
+    use crate::assistant::fakes::FakeDecisions;
+    use crate::ports::{
+        PortFuture, RecentResultsFilter, RepoError, ResultMatchView, SearchResultView,
+        StoredDecision, TrackedResultView,
+    };
 
     /// A stored search: its query and results.
     #[derive(Clone)]
@@ -156,6 +172,20 @@ mod tests {
                     }))
             })
         }
+
+        fn recent_results<'a>(
+            &'a self,
+            _: &'a TenantId,
+            _: UnixMillis,
+            _: &'a RecentResultsFilter,
+            _: u32,
+        ) -> PortFuture<'a, Result<Vec<TrackedResultView>, RepoError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+    }
+
+    fn no_decisions() -> Arc<FakeDecisions> {
+        Arc::new(FakeDecisions::default())
     }
 
     const NONE: Memberships = Memberships {
@@ -189,7 +219,7 @@ mod tests {
             result("homedepot_mx", false),
             result("sams_mx", true),
         ];
-        let read = SearchResults::new(repo);
+        let read = SearchResults::new(repo, no_decisions());
         let shown = |v: SearchView| {
             let names: Vec<String> = v
                 .results
@@ -227,7 +257,7 @@ mod tests {
     async fn start_cleans_the_query_and_reads_back_for_the_owner_only() {
         let repo = Arc::new(FakeRepo::default());
         let start = StartSearch::new(repo.clone());
-        let read = SearchResults::new(repo.clone());
+        let read = SearchResults::new(repo.clone(), no_decisions());
         let me = TenantId::default_tenant();
         let id = start.start(&me, "  taladro   inalámbrico ").await.unwrap();
         let view = read.get(&me, id, NONE).await.unwrap().unwrap();
@@ -265,8 +295,63 @@ mod tests {
             Err(SearchError::Storage)
         );
         assert_eq!(
-            SearchResults::new(repo).get(&me, SearchId(1), NONE).await,
+            SearchResults::new(repo, no_decisions())
+                .get(&me, SearchId(1), NONE)
+                .await,
             Err(SearchError::Storage)
         );
+    }
+
+    #[tokio::test]
+    async fn the_tenants_decisions_overlay_its_results_only() {
+        let repo = Arc::new(FakeRepo::default());
+        let me = TenantId::new("user-7").unwrap();
+        let other = TenantId::new("user-8").unwrap();
+        let start = StartSearch::new(repo.clone());
+        let mine = start.start(&me, "taladro").await.unwrap();
+        let theirs = start.start(&other, "taladro").await.unwrap();
+        let asin = Asin::new("B0E2ETEST1").unwrap();
+        let review = |sku: &str| {
+            let mut r = result("walmart_mx", false);
+            r.retailer_sku = RetailerSku::new(sku).unwrap();
+            r.amazon = Some(ResultMatchView {
+                asin: asin.clone(),
+                status: MatchStatus::NeedsReview,
+                confidence: Confidence::from_bp(6_000).unwrap(),
+                amazon_price_mxn: None,
+                fees_mxn: None,
+                profit_centavos: None,
+                roi_bp: None,
+                margin_bp: None,
+            });
+            r
+        };
+        for row in repo.rows.lock().unwrap().iter_mut() {
+            row.1.results = vec![review("1"), review("2")];
+        }
+        let decide = |sku: &str, decision| StoredDecision {
+            retailer: RetailerId::new("walmart_mx").unwrap(),
+            retailer_sku: RetailerSku::new(sku).unwrap(),
+            asin: asin.clone(),
+            decision,
+        };
+        let decisions = Arc::new(FakeDecisions::with(
+            &me,
+            vec![
+                decide("1", MatchDecision::Accept),
+                decide("2", MatchDecision::Reject),
+            ],
+        ));
+        let read = SearchResults::new(repo, decisions);
+        let v = read.get(&me, mine, NONE).await.unwrap().unwrap();
+        assert_eq!(
+            v.results[0].amazon.as_ref().unwrap().status,
+            MatchStatus::Accepted
+        );
+        assert!(v.results[1].amazon.is_none());
+        let v = read.get(&other, theirs, NONE).await.unwrap().unwrap();
+        for r in &v.results {
+            assert_eq!(r.amazon.as_ref().unwrap().status, MatchStatus::NeedsReview);
+        }
     }
 }

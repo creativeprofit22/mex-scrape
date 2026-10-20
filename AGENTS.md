@@ -30,6 +30,14 @@ Layout, module map and allowed crate dependencies: [docs/ARCHITECTURE.md](docs/A
 - Build: `npm --prefix web run build` (bakes `API_URL` into the `/backend/*` rewrite; `next start` ignores a runtime `API_URL`, so set it at build time and rebuild to change it)
 - Regenerate the API client: `npm --prefix web run gen:api` (writes `web/openapi.json` and `web/src/lib/api/schema.ts`; commit both — CI fails on drift)
 
+### Agent sidecar (`services/agent/`, Node 22)
+
+- Install: `npm --prefix services/agent ci`
+- Typecheck: `npm --prefix services/agent run typecheck`
+- Test: `npm --prefix services/agent test` (fake model provider and a fake api; no network)
+- Run: `npm --prefix services/agent start` (needs `AGENT_SERVICE_TOKEN`, `AGENT_API_URL`, `AGENT_PROVIDER`, `AGENT_MODEL`, `AGENT_PROVIDER_API_KEY`; see `.env.example` and [docs/modules/agent.md](docs/modules/agent.md))
+- Regenerate its api types after `gen:api`: `npm --prefix services/agent run gen:api` (commit `src/api/schema.ts`; CI fails on drift)
+
 ### Python (`fathom_transcript.py`, `scripts/`)
 
 - Install: `uv sync --locked`

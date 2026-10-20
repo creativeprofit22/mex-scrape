@@ -5,10 +5,11 @@ use std::sync::Arc;
 
 use domain::{
     Asin, DAY_MS, Memberships, PriceSample, PriceWindow, RetailerId, RetailerSku, STATS_WINDOWS,
-    UnixMillis, is_membership_retailer, window_stats,
+    TenantId, UnixMillis, is_membership_retailer, window_stats,
 };
 
-use crate::ports::{Clock, MatchRepo, PriceHistoryRepo};
+use crate::assistant::tenant_listings;
+use crate::ports::{Clock, MatchDecisionRepo, MatchRepo, PriceHistoryRepo};
 
 /// Why price stats could not be built.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -48,6 +49,7 @@ pub struct ProductPriceStats {
 pub struct PriceStats {
     prices: Arc<dyn PriceHistoryRepo>,
     matches: Arc<dyn MatchRepo>,
+    decisions: Arc<dyn MatchDecisionRepo>,
     clock: Arc<dyn Clock>,
 }
 
@@ -58,17 +60,21 @@ impl PriceStats {
     pub fn new(
         prices: Arc<dyn PriceHistoryRepo>,
         matches: Arc<dyn MatchRepo>,
+        decisions: Arc<dyn MatchDecisionRepo>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             prices,
             matches,
+            decisions,
             clock,
         }
     }
 
     /// 30/90/365-day stats for every listing with an accepted match to
-    /// `asin` (no listings when there is none). Listings from a membership
+    /// `asin` as `tenant` sees it: the tenant's own match decisions add or
+    /// remove listings (ADR 0013). No listings when there is none. Listings
+    /// from a membership
     /// store not in `memberships` are removed and counted in
     /// [`ProductPriceStats::hidden_listings`].
     ///
@@ -76,17 +82,17 @@ impl PriceStats {
     /// [`PriceStatsError::Storage`] if matches or history cannot be read.
     pub async fn for_product(
         &self,
+        tenant: &TenantId,
         asin: &Asin,
         memberships: Memberships,
     ) -> Result<ProductPriceStats, PriceStatsError> {
         let now = self.clock.now();
         let longest = STATS_WINDOWS.iter().copied().max().unwrap_or(0);
         let since = UnixMillis(now.0.saturating_sub(i64::from(longest) * DAY_MS));
-        let listings = self
-            .matches
-            .accepted_listings(asin)
-            .await
-            .map_err(|_| PriceStatsError::Storage)?;
+        let listings =
+            tenant_listings(self.matches.as_ref(), self.decisions.as_ref(), tenant, asin)
+                .await
+                .map_err(|_| PriceStatsError::Storage)?;
         let (listings, hidden_listings) = visible_listings(listings, memberships);
         let mut out = Vec::with_capacity(listings.len());
         for (retailer, retailer_sku) in listings {
@@ -142,6 +148,11 @@ mod tests {
     use domain::{Availability, Offer, PriceMxn, ProductMatch};
 
     use super::*;
+    use crate::assistant::fakes::FakeDecisions;
+
+    fn me() -> domain::TenantId {
+        domain::TenantId::new("user-7").unwrap()
+    }
     use crate::ports::{PortFuture, PricePoint, RepoError, UpsertOutcome};
 
     const NOW: i64 = 1_760_000_000_000;
@@ -218,6 +229,7 @@ mod tests {
         PriceStats::new(
             Arc::new(prices),
             Arc::new(FakeMatches(listings)),
+            Arc::new(FakeDecisions::default()),
             Arc::new(FixedClock),
         )
     }
@@ -247,7 +259,7 @@ mod tests {
         // Unsorted on purpose: the use case sorts.
         let s = stats(FakePrices(Ok(history)), vec![walmart, liverpool]);
         let asin = Asin::new("B0CHHSFMRL").unwrap();
-        let out = s.for_product(&asin, NONE).await.unwrap();
+        let out = s.for_product(&me(), &asin, NONE).await.unwrap();
 
         assert_eq!(out.asin, asin);
         assert_eq!(out.as_of, UnixMillis(NOW));
@@ -297,13 +309,13 @@ mod tests {
                 .collect();
             (names, out.hidden_listings)
         };
-        let none = s.for_product(&asin, NONE).await.unwrap();
+        let none = s.for_product(&me(), &asin, NONE).await.unwrap();
         assert_eq!(shown(none), (vec!["walmart_mx".to_owned()], 2));
         let costco = Memberships {
             costco: true,
             sams: false,
         };
-        let out = s.for_product(&asin, costco).await.unwrap();
+        let out = s.for_product(&me(), &asin, costco).await.unwrap();
         assert_eq!(
             shown(out),
             (vec!["costco_mx".to_owned(), "walmart_mx".to_owned()], 1)
@@ -314,7 +326,7 @@ mod tests {
     async fn no_accepted_listing_gives_no_rows() {
         let s = stats(FakePrices(Ok(BTreeMap::new())), vec![]);
         let out = s
-            .for_product(&Asin::new("B0CHHSFMRL").unwrap(), NONE)
+            .for_product(&me(), &Asin::new("B0CHHSFMRL").unwrap(), NONE)
             .await
             .unwrap();
         assert!(out.listings.is_empty());
@@ -327,8 +339,47 @@ mod tests {
             vec![key("walmart_mx", "1")],
         );
         assert_eq!(
-            s.for_product(&Asin::new("B0CHHSFMRL").unwrap(), NONE).await,
+            s.for_product(&me(), &Asin::new("B0CHHSFMRL").unwrap(), NONE)
+                .await,
             Err(PriceStatsError::Storage)
         );
+    }
+
+    #[tokio::test]
+    async fn the_tenants_decisions_change_its_listings_only() {
+        let asin = Asin::new("B0CHHSFMRL").unwrap();
+        let decide = |sku: &str, decision| crate::ports::StoredDecision {
+            retailer: RetailerId::new("walmart_mx").unwrap(),
+            retailer_sku: RetailerSku::new(sku).unwrap(),
+            asin: asin.clone(),
+            decision,
+        };
+        let decisions = FakeDecisions::with(
+            &me(),
+            vec![
+                decide("1", domain::MatchDecision::Reject),
+                decide("2", domain::MatchDecision::Accept),
+            ],
+        );
+        let s = PriceStats::new(
+            Arc::new(FakePrices(Ok(BTreeMap::new()))),
+            Arc::new(FakeMatches(vec![
+                key("walmart_mx", "1"),
+                key("liverpool", "9"),
+            ])),
+            Arc::new(decisions),
+            Arc::new(FixedClock),
+        );
+        let skus = |out: ProductPriceStats| {
+            out.listings
+                .iter()
+                .map(|l| format!("{}/{}", l.retailer.as_str(), l.retailer_sku.as_str()))
+                .collect::<Vec<_>>()
+        };
+        let mine = s.for_product(&me(), &asin, NONE).await.unwrap();
+        assert_eq!(skus(mine), ["liverpool/9", "walmart_mx/2"]);
+        let other = domain::TenantId::new("user-8").unwrap();
+        let theirs = s.for_product(&other, &asin, NONE).await.unwrap();
+        assert_eq!(skus(theirs), ["liverpool/9", "walmart_mx/1"]);
     }
 }

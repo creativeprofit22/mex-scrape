@@ -133,6 +133,10 @@ jobs:
       - name: Users and sessions tests
         run: cargo test --locked -p db --test users -- --ignored
 
+      # Assistant usage, suggestions, decisions, tracked results (migration 0009).
+      - name: Assistant tables tests
+        run: cargo test --locked -p db --test assistant -- --ignored
+
       # Worker jobs against Postgres with fake Bright Data and Amazon.
       - name: Worker job tests
         run: cargo test --locked -p worker --test jobs -- --ignored
@@ -172,6 +176,39 @@ jobs:
         run: |
           npx openapi-typescript openapi.json -o src/lib/api/schema.ts
           git diff --exit-code src/lib/api/schema.ts
+
+  # The gg-agent sidecar (services/agent): typecheck, tests against the fake
+  # model provider and a fake api, and its api types against openapi.json.
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/agent
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/agent/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Generated api types are up to date
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.ts
 
   # Sign in -> search -> product page in both languages, keyboard only, with
   # axe on every page, against Postgres seeded by `seed_e2e` (no worker:
@@ -219,10 +256,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            services/agent/package-lock.json
 
       - name: Install
         working-directory: web
+        run: npm ci
+
+      # Playwright also starts the assistant sidecar with its fake model.
+      - name: Install agent sidecar
+        working-directory: services/agent
         run: npm ci
 
       - name: Install Chromium

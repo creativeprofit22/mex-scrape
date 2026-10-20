@@ -12,19 +12,20 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use api::{
-    AccountsState, AdminState, ApiConfig, ProductsState, Quota, RateLimits, SearchesState,
-    SessionConfig, SessionStoreHandle,
+    AccountsState, AdminState, ApiConfig, AssistantState, ProductsState, Quota, RateLimits,
+    SearchesState, SessionConfig, SessionStoreHandle,
 };
 use app::{
-    CreateUserError, HashError, PasswordHasher, PortFuture, RepoError, UserCredentials, UserRecord,
-    UserRepo,
+    ChatId, CreateUserError, HashError, MatchDecisionRepo, NewDecision, NewSuggestion,
+    PasswordHasher, PortFuture, RepoError, StoredDecision, SuggestionId, SuggestionView,
+    UserCredentials, UserRecord, UserRepo,
 };
 use async_trait::async_trait;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
-use domain::{Email, Locale, Memberships, Plan, TenantId, UserId};
+use domain::{Asin, Email, Locale, Memberships, Plan, RetailerId, RetailerSku, TenantId, UserId};
 use http_body_util::BodyExt as _;
 use serde_json::{Value, json};
 use tower::ServiceExt as _;
@@ -154,6 +155,135 @@ impl UserRepo for FakeUsers {
     }
 }
 
+/// Per-tenant suggestions and decisions in memory (ids start at 1).
+#[derive(Default)]
+pub struct MemoryDecisions {
+    /// Stored suggestions with their ids.
+    pub suggestions: Mutex<Vec<(SuggestionId, NewSuggestion)>>,
+    /// Stored decisions (one per tenant and listing).
+    pub decisions: Mutex<Vec<NewDecision>>,
+}
+
+impl MemoryDecisions {
+    fn view(id: SuggestionId, s: &NewSuggestion) -> SuggestionView {
+        SuggestionView {
+            id,
+            chat_id: s.chat_id.clone(),
+            retailer: s.retailer.clone(),
+            retailer_sku: s.retailer_sku.clone(),
+            asin: s.asin.clone(),
+            title: s.title.clone(),
+            decision: s.decision,
+            reason: s.reason.as_str().to_owned(),
+            created_at: s.created_at,
+        }
+    }
+
+    fn stored(
+        &self,
+        tenant: &TenantId,
+        keep: impl Fn(&NewDecision) -> bool,
+    ) -> Vec<StoredDecision> {
+        let mut out: Vec<StoredDecision> = self
+            .decisions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|d| &d.tenant == tenant && keep(d))
+            .map(|d| StoredDecision {
+                retailer: d.retailer.clone(),
+                retailer_sku: d.retailer_sku.clone(),
+                asin: d.asin.clone(),
+                decision: d.decision,
+            })
+            .collect();
+        out.sort();
+        out
+    }
+}
+
+impl MatchDecisionRepo for MemoryDecisions {
+    fn create_suggestion<'a>(
+        &'a self,
+        s: &'a NewSuggestion,
+    ) -> PortFuture<'a, Result<SuggestionId, RepoError>> {
+        Box::pin(async move {
+            let mut rows = self.suggestions.lock().unwrap();
+            let id = SuggestionId(i64::try_from(rows.len()).unwrap() + 1);
+            rows.push((id, s.clone()));
+            Ok(id)
+        })
+    }
+
+    fn suggestions_for_chat<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        chat_id: &'a ChatId,
+    ) -> PortFuture<'a, Result<Vec<SuggestionView>, RepoError>> {
+        Box::pin(async move {
+            Ok(self
+                .suggestions
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(_, s)| &s.tenant == tenant && &s.chat_id == chat_id)
+                .map(|(id, s)| Self::view(*id, s))
+                .collect())
+        })
+    }
+
+    fn suggestion<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        id: SuggestionId,
+    ) -> PortFuture<'a, Result<Option<SuggestionView>, RepoError>> {
+        Box::pin(async move {
+            Ok(self
+                .suggestions
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|(i, s)| *i == id && &s.tenant == tenant)
+                .map(|(i, s)| Self::view(*i, s)))
+        })
+    }
+
+    fn decide<'a>(&'a self, d: &'a NewDecision) -> PortFuture<'a, Result<(), RepoError>> {
+        Box::pin(async move {
+            let mut rows = self.decisions.lock().unwrap();
+            rows.retain(|r| {
+                !(r.tenant == d.tenant
+                    && r.retailer == d.retailer
+                    && r.retailer_sku == d.retailer_sku)
+            });
+            rows.push(d.clone());
+            Ok(())
+        })
+    }
+
+    fn decisions_for_asin<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        asin: &'a Asin,
+    ) -> PortFuture<'a, Result<Vec<StoredDecision>, RepoError>> {
+        Box::pin(async move { Ok(self.stored(tenant, |d| &d.asin == asin)) })
+    }
+
+    fn decisions_for_listings<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        listings: &'a [(RetailerId, RetailerSku)],
+    ) -> PortFuture<'a, Result<Vec<StoredDecision>, RepoError>> {
+        Box::pin(async move {
+            Ok(self.stored(tenant, |d| {
+                listings
+                    .iter()
+                    .any(|(r, s)| r == &d.retailer && s == &d.retailer_sku)
+            }))
+        })
+    }
+}
+
 /// Session records in memory, shared between clones.
 #[derive(Debug, Clone, Default)]
 pub struct MemoryStore(Arc<Mutex<HashMap<Id, Record>>>);
@@ -229,7 +359,23 @@ pub struct TestApp {
 impl TestApp {
     /// Accounts enabled; the other route groups as given.
     pub fn new(products: ProductsState, searches: SearchesState, rate_limits: RateLimits) -> Self {
-        let users = Arc::new(FakeUsers::default());
+        Self::with_users(
+            Arc::new(FakeUsers::default()),
+            products,
+            searches,
+            AssistantState::disabled(),
+            rate_limits,
+        )
+    }
+
+    /// Like [`Self::new`] over `users`, with the assistant routes.
+    pub fn with_users(
+        users: Arc<FakeUsers>,
+        products: ProductsState,
+        searches: SearchesState,
+        assistant: AssistantState,
+        rate_limits: RateLimits,
+    ) -> Self {
         let sessions = MemoryStore::default();
         let accounts = AccountsState::new(
             users.clone(),
@@ -246,6 +392,7 @@ impl TestApp {
             searches,
             accounts,
             rate_limits,
+            assistant,
         });
         Self {
             router,

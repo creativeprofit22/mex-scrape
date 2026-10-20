@@ -9,8 +9,8 @@
 use std::sync::Arc;
 
 use app::{
-    Clock, PortFuture, RepoError, ResultMatchView, RetailerOutcomeView, SearchId, SearchRepo,
-    SearchResultView, SearchView,
+    Clock, PortFuture, RecentResultsFilter, RepoError, ResultMatchView, RetailerOutcomeView,
+    SearchId, SearchRepo, SearchResultView, SearchView, TrackedResultView,
 };
 use domain::{
     Asin, Availability, Confidence, MatchStatus, PriceMxn, RetailerId, RetailerSearchOutcome,
@@ -106,6 +106,33 @@ macro_rules! search_columns {
          (EXTRACT(EPOCH FROM created_at) * 1000)::BIGINT AS created_at_ms, \
          (EXTRACT(EPOCH FROM finished_at) * 1000)::BIGINT AS finished_at_ms"
     };
+}
+
+/// Columns selected for a [`SearchResultRow`].
+macro_rules! result_columns {
+    () => {
+        "retailer, retailer_sku, title, url, price_mxn, asin, match_status,          confidence_bp, amazon_price_mxn, fees_mxn, profit_centavos, roi_bp, margin_bp,          availability, membership_required"
+    };
+}
+
+fn result_row(r: &PgRow) -> Result<SearchResultRow, sqlx::Error> {
+    Ok(SearchResultRow {
+        retailer: r.try_get("retailer")?,
+        retailer_sku: r.try_get("retailer_sku")?,
+        title: r.try_get("title")?,
+        url: r.try_get("url")?,
+        price_mxn: r.try_get("price_mxn")?,
+        availability: r.try_get("availability")?,
+        membership_required: r.try_get("membership_required")?,
+        asin: r.try_get("asin")?,
+        match_status: r.try_get("match_status")?,
+        confidence_bp: r.try_get("confidence_bp")?,
+        amazon_price_mxn: r.try_get("amazon_price_mxn")?,
+        fees_mxn: r.try_get("fees_mxn")?,
+        profit_centavos: r.try_get("profit_centavos")?,
+        roi_bp: r.try_get("roi_bp")?,
+        margin_bp: r.try_get("margin_bp")?,
+    })
 }
 
 fn search_row(row: &PgRow) -> Result<SearchRow, sqlx::Error> {
@@ -331,42 +358,85 @@ pub async fn load_view(
         })
     })
     .collect::<Result<Vec<_>, sqlx::Error>>()?;
-    let results = sqlx::query(
-        "SELECT retailer, retailer_sku, title, url, price_mxn, asin, match_status, \
-           confidence_bp, amazon_price_mxn, fees_mxn, profit_centavos, roi_bp, margin_bp, \
-           availability, membership_required \
-         FROM search_results WHERE search_id = $1 \
-         ORDER BY retailer COLLATE \"C\", retailer_sku COLLATE \"C\"",
-    )
+    let results = sqlx::query(concat!(
+        "SELECT ",
+        result_columns!(),
+        " FROM search_results WHERE search_id = $1 \
+         ORDER BY retailer COLLATE \"C\", retailer_sku COLLATE \"C\""
+    ))
     .bind(id)
     .fetch_all(pool)
     .await?
     .iter()
-    .map(|r| {
-        Ok(SearchResultRow {
-            retailer: r.try_get("retailer")?,
-            retailer_sku: r.try_get("retailer_sku")?,
-            title: r.try_get("title")?,
-            url: r.try_get("url")?,
-            price_mxn: r.try_get("price_mxn")?,
-            availability: r.try_get("availability")?,
-            membership_required: r.try_get("membership_required")?,
-            asin: r.try_get("asin")?,
-            match_status: r.try_get("match_status")?,
-            confidence_bp: r.try_get("confidence_bp")?,
-            amazon_price_mxn: r.try_get("amazon_price_mxn")?,
-            fees_mxn: r.try_get("fees_mxn")?,
-            profit_centavos: r.try_get("profit_centavos")?,
-            roi_bp: r.try_get("roi_bp")?,
-            margin_bp: r.try_get("margin_bp")?,
-        })
-    })
+    .map(result_row)
     .collect::<Result<Vec<_>, sqlx::Error>>()?;
     Ok(Some(SearchViewRows {
         search,
         retailers,
         results,
     }))
+}
+
+/// A result of one of the tenant's recent searches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecentResultRow {
+    /// Search the result belongs to.
+    pub search_id: i64,
+    /// When that search was created (epoch ms).
+    pub seen_at_ms: i64,
+    /// The stored result.
+    pub result: SearchResultRow,
+}
+
+/// Results of `tenant_id`'s searches created at or after `since_ms`: one
+/// row per listing (its newest occurrence), newest first, at most `limit`.
+/// `title_contains` matches case-insensitively as plain text (no
+/// wildcards); `listing` narrows to one `(retailer, retailer_sku)`.
+///
+/// # Errors
+///
+/// Database errors; redact before logging.
+pub async fn recent_results(
+    pool: &PgPool,
+    tenant_id: &str,
+    since_ms: i64,
+    title_contains: Option<&str>,
+    listing: Option<(&str, &str)>,
+    limit: i64,
+) -> Result<Vec<RecentResultRow>, sqlx::Error> {
+    let rows = sqlx::query(concat!(
+        "SELECT * FROM (            SELECT DISTINCT ON (r.retailer, r.retailer_sku)              r.search_id,              (EXTRACT(EPOCH FROM s.created_at) * 1000)::BIGINT AS seen_at_ms,              s.created_at AS seen_at, ",
+        result_columns!(),
+        " FROM searches s JOIN search_results r ON r.search_id = s.id            WHERE s.tenant_id = $1              AND s.created_at >= to_timestamp($2 / 1000.0)              AND ($3::TEXT IS NULL OR strpos(lower(r.title), lower($3)) > 0)              AND ($4::TEXT IS NULL OR (r.retailer = $4 AND r.retailer_sku = $5))            ORDER BY r.retailer, r.retailer_sku, s.created_at DESC, r.search_id DESC          ) newest          ORDER BY seen_at DESC, search_id DESC,            retailer COLLATE \"C\", retailer_sku COLLATE \"C\"          LIMIT $6"
+    ))
+    .bind(tenant_id)
+    .bind(since_ms)
+    .bind(title_contains)
+    .bind(listing.map(|(r, _)| r))
+    .bind(listing.map(|(_, sku)| sku))
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    rows.iter()
+        .map(|r| {
+            Ok(RecentResultRow {
+                search_id: r.try_get("search_id")?,
+                seen_at_ms: r.try_get("seen_at_ms")?,
+                result: result_row(r)?,
+            })
+        })
+        .collect()
+}
+
+/// Maps a stored recent result to the app view; `None` if it breaks the
+/// schema's invariants (callers fail closed).
+#[must_use]
+pub fn tracked_from_row(row: RecentResultRow) -> Option<TrackedResultView> {
+    Some(TrackedResultView {
+        search_id: SearchId(row.search_id),
+        seen_at: UnixMillis(row.seen_at_ms),
+        result: result_view(row.result)?,
+    })
 }
 
 fn price(centavos: Option<i64>) -> Option<Option<PriceMxn>> {
@@ -483,6 +553,33 @@ impl SearchRepo for PgSearches {
                 .map_err(|_| RepoError::Unavailable)?;
             rows.map(|r| view_from_rows(r).ok_or(RepoError::Unavailable))
                 .transpose()
+        })
+    }
+
+    fn recent_results<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        since: UnixMillis,
+        filter: &'a RecentResultsFilter,
+        limit: u32,
+    ) -> PortFuture<'a, Result<Vec<TrackedResultView>, RepoError>> {
+        Box::pin(async move {
+            let rows = recent_results(
+                &self.pool,
+                tenant.as_str(),
+                since.0,
+                filter.title_contains.as_ref().map(SearchQuery::as_str),
+                filter
+                    .listing
+                    .as_ref()
+                    .map(|(r, sku)| (r.as_str(), sku.as_str())),
+                i64::from(limit),
+            )
+            .await
+            .map_err(|_| RepoError::Unavailable)?;
+            rows.into_iter()
+                .map(|r| tracked_from_row(r).ok_or(RepoError::Unavailable))
+                .collect()
         })
     }
 }

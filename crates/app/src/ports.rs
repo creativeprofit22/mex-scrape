@@ -9,9 +9,10 @@ use std::future::Future;
 use std::pin::Pin;
 
 use domain::{
-    Asin, Availability, Confidence, Email, Gtin, Locale, MatchStatus, Memberships, Offer, Plan,
-    PriceMxn, ProductMatch, RetailerId, RetailerSearchOutcome, RetailerSku, SearchQuery,
-    SearchStatus, TenantId, UnixMillis, UserId,
+    AgentStop, Asin, Availability, ChatHistory, Confidence, Email, Gtin, Locale, MatchDecision,
+    MatchStatus, Memberships, Offer, Plan, PriceMxn, ProductMatch, RetailerId,
+    RetailerSearchOutcome, RetailerSku, SearchQuery, SearchStatus, SuggestionReason, TenantId,
+    TokenCount, TokenUsage, UnixMillis, UserId,
 };
 
 /// Boxed future returned by async port methods.
@@ -462,6 +463,37 @@ pub trait SearchRepo: Send + Sync {
         tenant: &'a TenantId,
         id: SearchId,
     ) -> PortFuture<'a, Result<Option<SearchView>, RepoError>>;
+
+    /// Results of the tenant's searches created at or after `since`, one
+    /// row per listing (its newest occurrence), newest first, at most
+    /// `limit` rows. Stored state only: no overlay, no membership hiding.
+    fn recent_results<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        since: UnixMillis,
+        filter: &'a RecentResultsFilter,
+        limit: u32,
+    ) -> PortFuture<'a, Result<Vec<TrackedResultView>, RepoError>>;
+}
+
+/// Narrows [`SearchRepo::recent_results`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RecentResultsFilter {
+    /// Listing title contains this text (case-insensitive).
+    pub title_contains: Option<SearchQuery>,
+    /// Only this listing.
+    pub listing: Option<(RetailerId, RetailerSku)>,
+}
+
+/// A search result of one of the tenant's recent searches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrackedResultView {
+    /// Search the result belongs to.
+    pub search_id: SearchId,
+    /// When that search was created.
+    pub seen_at: UnixMillis,
+    /// The result as stored.
+    pub result: SearchResultView,
 }
 
 /// A stored user account, without its password hash.
@@ -563,4 +595,227 @@ pub trait PasswordHasher: Send + Sync {
     /// A valid hash of a random secret, verified against when the e-mail is
     /// unknown so sign-in takes the same time either way.
     fn dummy_hash(&self) -> &str;
+}
+
+/// Id of a stored assistant match suggestion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SuggestionId(pub i64);
+
+/// An assistant chat id: 8..=64 ASCII letters, digits or `-`, minted by the
+/// api per chat request.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ChatId(String);
+
+impl ChatId {
+    /// Validates a chat id.
+    #[must_use]
+    pub fn parse(raw: &str) -> Option<Self> {
+        let ok = (8..=64).contains(&raw.len())
+            && raw.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+        ok.then(|| Self(raw.to_owned()))
+    }
+
+    /// The id.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A match suggestion to store (made by the assistant, never applied).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewSuggestion {
+    /// Owning tenant.
+    pub tenant: TenantId,
+    /// Chat that produced it.
+    pub chat_id: ChatId,
+    /// Retailer of the listing.
+    pub retailer: RetailerId,
+    /// The retailer's product id.
+    pub retailer_sku: RetailerSku,
+    /// Amazon product of the match under review.
+    pub asin: Asin,
+    /// Listing title (copied from the tenant's stored result).
+    pub title: String,
+    /// Proposed verdict.
+    pub decision: MatchDecision,
+    /// Why.
+    pub reason: SuggestionReason,
+    /// When it was made.
+    pub created_at: UnixMillis,
+}
+
+/// A stored match suggestion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SuggestionView {
+    /// Suggestion id.
+    pub id: SuggestionId,
+    /// Chat that produced it.
+    pub chat_id: ChatId,
+    /// Retailer of the listing.
+    pub retailer: RetailerId,
+    /// The retailer's product id.
+    pub retailer_sku: RetailerSku,
+    /// Amazon product of the match under review.
+    pub asin: Asin,
+    /// Listing title.
+    pub title: String,
+    /// Proposed verdict.
+    pub decision: MatchDecision,
+    /// Why.
+    pub reason: String,
+    /// When it was made.
+    pub created_at: UnixMillis,
+}
+
+/// A user's verdict on a listing's match, scoped to their tenant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewDecision {
+    /// Owning tenant.
+    pub tenant: TenantId,
+    /// Retailer of the listing.
+    pub retailer: RetailerId,
+    /// The retailer's product id.
+    pub retailer_sku: RetailerSku,
+    /// Amazon product the verdict is about.
+    pub asin: Asin,
+    /// Verdict.
+    pub decision: MatchDecision,
+    /// Who decided.
+    pub decided_by: UserId,
+    /// The assistant suggestion it confirms, if any.
+    pub suggestion_id: Option<SuggestionId>,
+    /// When.
+    pub decided_at: UnixMillis,
+}
+
+/// A stored tenant verdict.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct StoredDecision {
+    /// Retailer of the listing.
+    pub retailer: RetailerId,
+    /// The retailer's product id.
+    pub retailer_sku: RetailerSku,
+    /// Amazon product the verdict is about.
+    pub asin: Asin,
+    /// Verdict.
+    pub decision: MatchDecision,
+}
+
+/// Per-tenant match suggestions and decisions (implemented by
+/// `db::assistant::PgMatchDecisions`). The global match table is never
+/// written through this port.
+pub trait MatchDecisionRepo: Send + Sync {
+    /// Stores a suggestion.
+    fn create_suggestion<'a>(
+        &'a self,
+        s: &'a NewSuggestion,
+    ) -> PortFuture<'a, Result<SuggestionId, RepoError>>;
+
+    /// The tenant's suggestions from `chat_id`, oldest first.
+    fn suggestions_for_chat<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        chat_id: &'a ChatId,
+    ) -> PortFuture<'a, Result<Vec<SuggestionView>, RepoError>>;
+
+    /// The tenant's suggestion `id`; `None` if unknown or another tenant's.
+    fn suggestion<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        id: SuggestionId,
+    ) -> PortFuture<'a, Result<Option<SuggestionView>, RepoError>>;
+
+    /// Inserts or replaces the tenant's verdict on the listing.
+    fn decide<'a>(&'a self, d: &'a NewDecision) -> PortFuture<'a, Result<(), RepoError>>;
+
+    /// The tenant's verdicts about `asin`, sorted by retailer then SKU.
+    fn decisions_for_asin<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        asin: &'a Asin,
+    ) -> PortFuture<'a, Result<Vec<StoredDecision>, RepoError>>;
+
+    /// The tenant's verdicts on any of `listings`, sorted by retailer then
+    /// SKU.
+    fn decisions_for_listings<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        listings: &'a [(RetailerId, RetailerSku)],
+    ) -> PortFuture<'a, Result<Vec<StoredDecision>, RepoError>>;
+}
+
+/// Assistant tokens used per tenant and UTC day (implemented by
+/// `db::assistant::PgAgentUsage`). `epoch_day` counts days since
+/// 1970-01-01 UTC.
+pub trait AgentUsageRepo: Send + Sync {
+    /// Tokens the tenant used on `epoch_day`.
+    fn used_on<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        epoch_day: i64,
+    ) -> PortFuture<'a, Result<TokenUsage, RepoError>>;
+
+    /// Atomically adds `usage` and returns the day's new total.
+    fn add<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        epoch_day: i64,
+        usage: TokenUsage,
+    ) -> PortFuture<'a, Result<TokenUsage, RepoError>>;
+}
+
+/// One chat run handed to the assistant engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EngineRequest {
+    /// Chat id (scopes suggestions and the tool grant).
+    pub chat_id: ChatId,
+    /// Signed-in user.
+    pub user: UserId,
+    /// Their tenant.
+    pub tenant: TenantId,
+    /// Reply language.
+    pub locale: Locale,
+    /// Validated history, last message from the user.
+    pub history: ChatHistory,
+    /// Tokens the tenant may still use today.
+    pub token_budget: TokenCount,
+}
+
+/// What the engine answered (untrusted; cleaned by the use case).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EngineReply {
+    /// Assistant text.
+    pub reply: String,
+    /// Why the run ended.
+    pub stop: AgentStop,
+    /// Tokens used by the run.
+    pub usage: TokenUsage,
+}
+
+/// Why the assistant engine failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum EngineError {
+    /// No engine configured, or it could not be reached.
+    #[error("assistant unavailable")]
+    Unavailable,
+    /// The tenant already has a chat in flight.
+    #[error("assistant busy")]
+    Busy,
+    /// The run took too long.
+    #[error("assistant timed out")]
+    Timeout,
+    /// The run failed or answered something invalid.
+    #[error("assistant failed")]
+    Failed,
+}
+
+/// The AI assistant (implemented in `api` by the gg-agent sidecar client,
+/// ADR 0013).
+pub trait AssistantEngine: Send + Sync {
+    /// Runs one chat.
+    fn chat<'a>(
+        &'a self,
+        request: &'a EngineRequest,
+    ) -> PortFuture<'a, Result<EngineReply, EngineError>>;
 }

@@ -28,6 +28,14 @@ use sqlx::{PgPool, Row as _};
 /// The Amazon product every seeded listing is matched to.
 const ASIN: &str = "B0E2ETEST1";
 
+/// The listing whose match `complete` leaves `needs_review`. The scripted
+/// assistant model used by the e2e suite (`services/agent`, fake provider)
+/// proposes a decision for exactly this retailer, SKU and [`ASIN`], so keep
+/// them in sync.
+const REVIEW_RETAILER: &str = "costco_mx";
+/// SKU of the `needs_review` listing (see [`REVIEW_RETAILER`]).
+const REVIEW_SKU: &str = "E2E-COS-1";
+
 /// Default e-mail of the seeded account.
 const DEFAULT_EMAIL: &str = "e2e@example.com";
 
@@ -123,7 +131,10 @@ async fn main() -> anyhow::Result<()> {
                 complete(&pool).await?;
                 tokio::time::sleep(Duration::from_millis(500)).await;
             },
-            _ => bail!("usage: seed_e2e seed | seed_e2e complete [--watch]"),
+            ["reset-assistant"] => reset_assistant(&pool).await,
+            _ => bail!(
+                "usage: seed_e2e seed | seed_e2e complete [--watch] | seed_e2e reset-assistant"
+            ),
         }
     }
     .await;
@@ -174,6 +185,35 @@ async fn upsert_account(pool: &PgPool, email: &str, hash: &str, now: i64) -> any
     Ok(id)
 }
 
+/// Deletes the e2e accounts' match decisions, suggestions and assistant
+/// token usage, so the `needs_review` fixture is back for every run.
+async fn reset_assistant(pool: &PgPool) -> anyhow::Result<()> {
+    let mut emails = Vec::new();
+    for raw in [email(), pending_email()] {
+        let parsed =
+            domain::Email::parse(&raw).map_err(|_| anyhow::anyhow!("invalid e2e email"))?;
+        emails.push(parsed.as_str().to_owned());
+    }
+    let mut tx = pool.begin().await.context("starting the reset")?;
+    // Decisions first: they reference suggestions.
+    for sql in [
+        "DELETE FROM match_decisions WHERE tenant_id IN \
+         (SELECT tenant_id FROM users WHERE email = ANY($1))",
+        "DELETE FROM match_suggestions WHERE tenant_id IN \
+         (SELECT tenant_id FROM users WHERE email = ANY($1))",
+        "DELETE FROM agent_token_usage WHERE tenant_id IN \
+         (SELECT tenant_id FROM users WHERE email = ANY($1))",
+    ] {
+        sqlx::query(sql)
+            .bind(&emails[..])
+            .execute(&mut *tx)
+            .await
+            .context("clearing assistant rows")?;
+    }
+    tx.commit().await.context("committing the reset")?;
+    Ok(())
+}
+
 async fn seed(pool: &PgPool) -> anyhow::Result<()> {
     let now = now_ms()?;
     let email = domain::Email::parse(&email()).map_err(|_| anyhow::anyhow!("invalid E2E_EMAIL"))?;
@@ -195,6 +235,8 @@ async fn seed(pool: &PgPool) -> anyhow::Result<()> {
     .execute(pool)
     .await
     .context("resetting onboarding")?;
+
+    reset_assistant(pool).await?;
 
     for (retailer, sku, base) in LISTINGS {
         db::price_history::upsert_match(
@@ -317,7 +359,7 @@ fn results(query: &str) -> Vec<SearchResultRow> {
         9_800,
     ));
     out.extend(matched(
-        row("costco_mx", "E2E-COS-1", 109_900, true),
+        row(REVIEW_RETAILER, REVIEW_SKU, 109_900, true),
         "needs_review",
         7_200,
     ));

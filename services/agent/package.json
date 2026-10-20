@@ -1,0 +1,28 @@
+{
+  "name": "mex-scrape-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless gg-agent sidecar for the mex-scrape assistant. Tools only call the Rust api.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12 <23"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "npm run build && node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "gen:api": "openapi-typescript ../../web/openapi.json -o src/api/schema.ts"
+  },
+  "dependencies": {
+    "@kenkaiiii/gg-agent": "5.84.2",
+    "@kenkaiiii/gg-ai": "5.84.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

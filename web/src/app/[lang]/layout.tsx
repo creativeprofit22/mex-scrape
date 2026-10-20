@@ -51,6 +51,9 @@ export default async function RootLayout({
                 <Link href={`/${lang}/calculator`}>{dict.nav.calculator}</Link>
               </li>
               <li>
+                <Link href={`/${lang}/assistant`}>{dict.nav.assistant}</Link>
+              </li>
+              <li>
                 <Link href={`/${lang}/signin`}>{dict.nav.signIn}</Link>
               </li>
               <li>

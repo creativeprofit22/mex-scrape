@@ -4,6 +4,7 @@
 //! `sqlx::query` calls so builds never need a live database.
 
 pub mod access;
+pub mod assistant;
 pub mod brightdata_runs;
 pub mod price_history;
 pub mod queue;

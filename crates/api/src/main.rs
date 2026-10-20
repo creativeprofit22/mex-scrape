@@ -5,13 +5,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context as _;
 use api::auth::hasher::Argon2Hasher;
-use app::{AccessReport, Clock, PriceSeries, PriceStats, SearchResults, StartSearch};
+use app::{AccessReport, Clock, PriceSeries, PriceStats, SearchResults, StartSearch, TokenCaps};
 use axum::http::HeaderName;
 use db::access::PgAccessCounts;
+use db::assistant::{PgAgentUsage, PgMatchDecisions};
 use db::price_history::{PgMatches, PgPriceHistory};
 use db::searches::PgSearches;
 use db::users::PgUsers;
-use domain::UnixMillis;
+use domain::{TokenCount, UnixMillis};
 use retailers::RetailerOfferSource;
 
 /// The wall clock. A clock before 1970 reads as 0.
@@ -30,7 +31,8 @@ impl Clock for SystemClock {
 fn price_stats(pool: db::PgPool) -> PriceStats {
     PriceStats::new(
         Arc::new(PgPriceHistory(pool.clone())),
-        Arc::new(PgMatches(pool)),
+        Arc::new(PgMatches(pool.clone())),
+        Arc::new(PgMatchDecisions::new(pool)),
         Arc::new(SystemClock),
     )
 }
@@ -39,7 +41,8 @@ fn price_stats(pool: db::PgPool) -> PriceStats {
 fn price_series(pool: db::PgPool) -> PriceSeries {
     PriceSeries::new(
         Arc::new(PgPriceHistory(pool.clone())),
-        Arc::new(PgMatches(pool)),
+        Arc::new(PgMatches(pool.clone())),
+        Arc::new(PgMatchDecisions::new(pool)),
         Arc::new(SystemClock),
     )
 }
@@ -104,7 +107,115 @@ fn products_state(pool: Option<&db::PgPool>) -> api::ProductsState {
 fn searches_state(pool: Option<&db::PgPool>) -> api::SearchesState {
     pool.map_or_else(api::SearchesState::disabled, |pool| {
         let repo = Arc::new(PgSearches::new(pool.clone(), Arc::new(SystemClock)));
-        api::SearchesState::new(StartSearch::new(repo.clone()), SearchResults::new(repo))
+        let decisions = Arc::new(PgMatchDecisions::new(pool.clone()));
+        api::SearchesState::new(
+            StartSearch::new(repo.clone()),
+            SearchResults::new(repo, decisions),
+        )
+    })
+}
+
+/// Default daily assistant tokens on the free plan.
+const DEFAULT_AGENT_TOKENS_FREE: u64 = 50_000;
+/// Default daily assistant tokens on the pro plan.
+const DEFAULT_AGENT_TOKENS_PRO: u64 = 500_000;
+
+/// A positive integer from `name`; unset or invalid keeps `default`.
+fn env_u64(name: &str, default: u64) -> u64 {
+    match std::env::var(name) {
+        Ok(raw) => raw
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .filter(|v| *v > 0)
+            .unwrap_or_else(|| {
+                tracing::warn!("{name} must be a positive integer; using {default}");
+                default
+            }),
+        Err(_) => default,
+    }
+}
+
+/// A secret from `name`, or `None` (logged by name only) when unset or
+/// invalid.
+fn env_secret(name: &str) -> Option<http_guard::Secret> {
+    match http_guard::Secret::from_env(name) {
+        Ok(secret) => secret,
+        Err(_) => {
+            tracing::warn!("{name} is invalid; assistant disabled");
+            None
+        }
+    }
+}
+
+/// The sidecar client and shared secrets from `AGENT_URL`,
+/// `AGENT_SERVICE_TOKEN` and `AGENT_GRANT_KEY`; `None` (logged without
+/// values) unless all three are set and valid.
+fn agent_config(clock: &Arc<dyn Clock>) -> Option<(Arc<dyn app::AssistantEngine>, api::AgentAuth)> {
+    let url = std::env::var("AGENT_URL")
+        .ok()
+        .filter(|u| !u.trim().is_empty());
+    let (Some(url), Some(token), Some(key)) = (
+        url,
+        env_secret("AGENT_SERVICE_TOKEN"),
+        env_secret("AGENT_GRANT_KEY"),
+    ) else {
+        tracing::info!(
+            "AGENT_URL, AGENT_SERVICE_TOKEN or AGENT_GRANT_KEY is unset; assistant disabled"
+        );
+        return None;
+    };
+    if token.expose_secret().len() < api::MIN_SERVICE_TOKEN_LEN {
+        tracing::warn!("AGENT_SERVICE_TOKEN is too short; assistant disabled");
+        return None;
+    }
+    let Some(grants) = api::GrantKey::new(key).map(Arc::new) else {
+        tracing::warn!("AGENT_GRANT_KEY is shorter than 32 bytes; assistant disabled");
+        return None;
+    };
+    let engine =
+        match api::SidecarEngine::connect(url.trim(), token.clone(), grants.clone(), clock.clone())
+        {
+            Ok(engine) => engine,
+            Err(error) => {
+                tracing::warn!(%error, "assistant disabled");
+                return None;
+            }
+        };
+    Some((
+        Arc::new(engine),
+        api::AgentAuth {
+            service_token: token,
+            grants,
+        },
+    ))
+}
+
+/// Assistant routes need a database; chats and tool routes also need the
+/// sidecar settings (else they answer 503).
+fn assistant_state(pool: Option<&db::PgPool>) -> api::AssistantState {
+    let Some(pool) = pool else {
+        return api::AssistantState::disabled();
+    };
+    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+    let (engine, agent) = agent_config(&clock).unzip();
+    api::AssistantState::new(api::AssistantDeps {
+        engine,
+        agent,
+        searches: Arc::new(PgSearches::new(pool.clone(), clock.clone())),
+        decisions: Arc::new(PgMatchDecisions::new(pool.clone())),
+        usage: Arc::new(PgAgentUsage::new(pool.clone())),
+        users: Arc::new(PgUsers::new(pool.clone(), clock.clone())),
+        stats: Arc::new(price_stats(pool.clone())),
+        series: Arc::new(price_series(pool.clone())),
+        clock,
+        caps: TokenCaps {
+            free: TokenCount::new(env_u64(
+                "AGENT_DAILY_TOKENS_FREE",
+                DEFAULT_AGENT_TOKENS_FREE,
+            )),
+            pro: TokenCount::new(env_u64("AGENT_DAILY_TOKENS_PRO", DEFAULT_AGENT_TOKENS_PRO)),
+        },
     })
 }
 
@@ -251,6 +362,7 @@ async fn main() -> anyhow::Result<()> {
         searches: searches_state(pool.as_ref()),
         accounts: accounts_state(pool.as_ref()),
         rate_limits: rate_limits(),
+        assistant: assistant_state(pool.as_ref()),
     });
     // Peer addresses feed the per-IP rate limit.
     let app = router.into_make_service_with_connect_info::<std::net::SocketAddr>();

@@ -134,7 +134,12 @@ pub(crate) async fn calculate_roi(
     body: Result<Json<RoiRequest>, JsonRejection>,
 ) -> Result<Json<RoiResponse>, ApiError> {
     signed_in(&auth)?;
-    let body = json_body(body)?;
+    compute(&json_body(body)?).map(Json)
+}
+
+/// ROI for a validated batch; shared with the assistant's `compute_roi`
+/// tool route.
+pub(crate) fn compute(body: &RoiRequest) -> Result<RoiResponse, ApiError> {
     // Size first, so an oversized body is refused before any parsing work.
     if body.items.len() > MAX_ROI_BATCH {
         return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY, "too_many"));
@@ -148,7 +153,7 @@ pub(crate) async fn calculate_roi(
         RoiBatchError::Empty => ApiError(StatusCode::UNPROCESSABLE_ENTITY, "empty"),
         RoiBatchError::TooMany => ApiError(StatusCode::UNPROCESSABLE_ENTITY, "too_many"),
     })?;
-    Ok(Json(RoiResponse {
+    Ok(RoiResponse {
         results: results.into_iter().map(Into::into).collect(),
-    }))
+    })
 }

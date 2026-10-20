@@ -45,6 +45,143 @@
         ]
       }
     },
+    "/assistant/chat": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Ask the assistant about the signed-in user's tracked products (their\nsearches of the last 90 days): prices, seasons (Hot Sale, Buen Fin) and\nuncertain matches. Runs within the plan's daily token budget.",
+        "operationId": "assistant_chat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`agent_busy`: a chat of this user is still running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_messages`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`agent_budget` (daily tokens used up) or plan rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`agent_failed`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`agent_unavailable` or `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "`agent_timeout`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": [],
+            "session_cookie": []
+          }
+        ]
+      }
+    },
     "/auth/csrf": {
       "get": {
         "tags": [
@@ -384,6 +521,593 @@
             }
           }
         }
+      }
+    },
+    "/internal/agent/match-suggestions": {
+      "post": {
+        "tags": [
+          "agent-internal"
+        ],
+        "summary": "Propose a verdict on a `needs_review` match in the user's recent\nsearches. Stores a suggestion only; the user confirms it in the app.",
+        "operationId": "agent_suggest_match",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSuggestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Suggestion stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSuggestionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated` or `invalid_grant`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_reviewable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_suggestion`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "agent_grant": [],
+            "agent_service": []
+          }
+        ]
+      }
+    },
+    "/internal/agent/offers": {
+      "get": {
+        "tags": [
+          "agent-internal"
+        ],
+        "summary": "Tracked offers (the user's searches of the last 90 days). Read-only;\nnever starts a search.",
+        "operationId": "agent_offers",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Title contains this text (1–100 characters).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "match_status",
+            "in": "query",
+            "description": "`accepted` or `needs_review`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "1–20 (default 10).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 20,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracked offers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentOffersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query string",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated` or `invalid_grant`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_query`, `invalid_match_status` or `invalid_limit`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "agent_grant": [],
+            "agent_service": []
+          }
+        ]
+      }
+    },
+    "/internal/agent/products/{asin}/price-history": {
+      "get": {
+        "tags": [
+          "agent-internal"
+        ],
+        "summary": "Price stats (30/90/365 days) and the daily series of a product as this\ntenant sees it (its own match decisions applied).",
+        "operationId": "agent_price_history",
+        "parameters": [
+          {
+            "name": "asin",
+            "in": "path",
+            "description": "Amazon ASIN (10 letters or digits)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Days back from now, 1–365 (default 365).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 365,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stats and series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPriceHistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid ASIN or query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated` or `invalid_grant`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`days` outside 1–365",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "agent_grant": [],
+            "agent_service": []
+          }
+        ]
+      }
+    },
+    "/internal/agent/roi": {
+      "post": {
+        "tags": [
+          "agent-internal"
+        ],
+        "summary": "ROI for up to 100 items (same calculation as `POST /roi`).",
+        "operationId": "agent_roi",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "One result per item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated` or `invalid_grant`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_amount`, `empty` or `too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "agent_grant": [],
+            "agent_service": []
+          }
+        ]
+      }
+    },
+    "/internal/agent/usage": {
+      "post": {
+        "tags": [
+          "agent-internal"
+        ],
+        "summary": "Add a turn's tokens to the tenant's daily total; answers what is left\n(authoritative; the sidecar stops at 0).",
+        "operationId": "agent_usage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentUsageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUsageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated` or `invalid_grant`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_usage`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "agent_grant": [],
+            "agent_service": []
+          }
+        ]
+      }
+    },
+    "/matches/decisions": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Accept or reject a `needs_review` match in one of the signed-in user's\nrecent searches. Only this user's tenant sees the change (search\nresults and price stats); the decision records who made it.",
+        "operationId": "decide_match",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Decision stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchDecisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_reviewable`: not a needs-review match in your recent searches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_decision` or `suggestion_mismatch`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plan rate limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": [],
+            "session_cookie": []
+          }
+        ]
       }
     },
     "/me": {
@@ -1107,6 +1831,212 @@
   },
   "components": {
     "schemas": {
+      "AgentOfferResponse": {
+        "type": "object",
+        "description": "One tracked offer.",
+        "required": [
+          "search_id",
+          "seen_at_ms",
+          "offer"
+        ],
+        "properties": {
+          "offer": {
+            "$ref": "#/components/schemas/SearchResultResponse",
+            "description": "The offer, with this tenant's match decisions applied."
+          },
+          "search_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Search it was found by."
+          },
+          "seen_at_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When that search ran (epoch milliseconds)."
+          }
+        }
+      },
+      "AgentOffersResponse": {
+        "type": "object",
+        "description": "The tenant's tracked offers.",
+        "required": [
+          "offers",
+          "hidden"
+        ],
+        "properties": {
+          "hidden": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Offers hidden because they need a membership the user lacks.",
+            "minimum": 0
+          },
+          "offers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentOfferResponse"
+            },
+            "description": "Newest first."
+          }
+        }
+      },
+      "AgentPriceHistoryResponse": {
+        "type": "object",
+        "description": "Price stats and daily history of a product.",
+        "required": [
+          "stats",
+          "history"
+        ],
+        "properties": {
+          "history": {
+            "$ref": "#/components/schemas/PriceHistoryResponse",
+            "description": "Daily low/high per listing over the requested days."
+          },
+          "stats": {
+            "$ref": "#/components/schemas/PriceStatsResponse",
+            "description": "30/90/365-day low, high and average per listing."
+          }
+        }
+      },
+      "AgentSuggestionRequest": {
+        "type": "object",
+        "description": "Body of `POST /internal/agent/match-suggestions`.",
+        "required": [
+          "retailer",
+          "retailer_sku",
+          "asin",
+          "decision",
+          "reason"
+        ],
+        "properties": {
+          "asin": {
+            "type": "string",
+            "description": "Amazon product of the match under review."
+          },
+          "decision": {
+            "type": "string",
+            "description": "`accept` or `reject`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, 1–300 characters."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id."
+          },
+          "retailer_sku": {
+            "type": "string",
+            "description": "The retailer's product id."
+          }
+        }
+      },
+      "AgentUsageRequest": {
+        "type": "object",
+        "description": "Body of `POST /internal/agent/usage`: tokens of one finished turn.",
+        "required": [
+          "input_tokens",
+          "output_tokens"
+        ],
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Prompt tokens.",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Generated tokens.",
+            "minimum": 0
+          }
+        }
+      },
+      "AgentUsageResponse": {
+        "type": "object",
+        "description": "Tokens left today.",
+        "required": [
+          "remaining_tokens"
+        ],
+        "properties": {
+          "remaining_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Tokens the tenant may still use today (0 when spent).",
+            "minimum": 0
+          }
+        }
+      },
+      "ChatMessageRequest": {
+        "type": "object",
+        "description": "One chat message.",
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Text, 1–2000 characters after trimming."
+          },
+          "role": {
+            "type": "string",
+            "description": "`user` or `assistant`."
+          }
+        }
+      },
+      "ChatRequest": {
+        "type": "object",
+        "description": "Body of `POST /assistant/chat`: the whole conversation, oldest first.",
+        "required": [
+          "messages"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageRequest"
+            },
+            "description": "1–20 messages, at most 16 000 characters in total, the last from\nthe user."
+          }
+        }
+      },
+      "ChatResponse": {
+        "type": "object",
+        "description": "The assistant's answer.",
+        "required": [
+          "chat_id",
+          "reply",
+          "stop",
+          "suggestions",
+          "usage"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "Id of this chat run."
+          },
+          "reply": {
+            "type": "string",
+            "description": "Answer text (plain text; render it escaped)."
+          },
+          "stop": {
+            "type": "string",
+            "description": "`done`, `max_turns` or `token_budget`."
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MatchSuggestionResponse"
+            },
+            "description": "Match suggestions made during this run."
+          },
+          "usage": {
+            "$ref": "#/components/schemas/TokenUsageResponse",
+            "description": "Tokens used."
+          }
+        }
+      },
       "CsrfResponse": {
         "type": "object",
         "description": "The session's CSRF token.",
@@ -1239,6 +2169,114 @@
           "locale": {
             "type": "string",
             "description": "`es` or `en`."
+          }
+        }
+      },
+      "MatchDecisionRequest": {
+        "type": "object",
+        "description": "Body of `POST /matches/decisions`.",
+        "required": [
+          "retailer",
+          "retailer_sku",
+          "asin",
+          "decision"
+        ],
+        "properties": {
+          "asin": {
+            "type": "string",
+            "description": "Amazon product of the match under review."
+          },
+          "decision": {
+            "type": "string",
+            "description": "`accept` or `reject`."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id."
+          },
+          "retailer_sku": {
+            "type": "string",
+            "description": "The retailer's product id."
+          },
+          "suggestion_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The assistant suggestion being confirmed, if any."
+          }
+        }
+      },
+      "MatchDecisionResponse": {
+        "type": "object",
+        "description": "The stored verdict.",
+        "required": [
+          "retailer",
+          "retailer_sku",
+          "asin",
+          "decision"
+        ],
+        "properties": {
+          "asin": {
+            "type": "string",
+            "description": "Amazon product."
+          },
+          "decision": {
+            "type": "string",
+            "description": "`accept` or `reject`."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id."
+          },
+          "retailer_sku": {
+            "type": "string",
+            "description": "The retailer's product id."
+          }
+        }
+      },
+      "MatchSuggestionResponse": {
+        "type": "object",
+        "description": "A verdict the assistant proposed; nothing changes until the user\nconfirms it with `POST /matches/decisions`.",
+        "required": [
+          "id",
+          "retailer",
+          "retailer_sku",
+          "asin",
+          "title",
+          "decision",
+          "reason"
+        ],
+        "properties": {
+          "asin": {
+            "type": "string",
+            "description": "Amazon product of the match under review."
+          },
+          "decision": {
+            "type": "string",
+            "description": "`accept` or `reject`."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Suggestion id (pass it as `suggestion_id` when confirming)."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in the assistant's words (untrusted text)."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id."
+          },
+          "retailer_sku": {
+            "type": "string",
+            "description": "The retailer's product id."
+          },
+          "title": {
+            "type": "string",
+            "description": "Listing title (from the user's own search results)."
           }
         }
       },
@@ -1898,10 +2936,41 @@
             "description": "Keywords, 1–100 characters after trimming and collapsing spaces."
           }
         }
+      },
+      "TokenUsageResponse": {
+        "type": "object",
+        "description": "Tokens a run used.",
+        "required": [
+          "input_tokens",
+          "output_tokens"
+        ],
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Prompt tokens (including tool results).",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Generated tokens.",
+            "minimum": 0
+          }
+        }
       }
     },
     "securitySchemes": {
       "admin_bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "agent_grant": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Agent-Grant"
+      },
+      "agent_service": {
         "type": "http",
         "scheme": "bearer"
       },

@@ -6,11 +6,17 @@ import { defineConfig, devices } from "@playwright/test";
 //   npm --prefix web run build && npm --prefix web run e2e
 // Playwright starts the api and `next start` unless they are already up
 // (locally); searches are completed by `seed_e2e complete`, so no worker,
-// Bright Data or Amazon credentials are needed.
+// Bright Data or Amazon credentials are needed. The assistant sidecar runs
+// with the scripted fake model (needs `npm --prefix services/agent ci`).
 
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgres://mex:mex@127.0.0.1:5432/mex_scrape";
 const ci = Boolean(process.env.CI);
+
+// The assistant sidecar (services/agent) with its scripted fake model. These
+// values are e2e-only fixtures shared by the api and the sidecar, not secrets.
+const agentServiceToken = "e2e-agent-service-token-0123456789abcdef";
+const agentGrantKey = "e2e-agent-grant-key-0123456789abcdef0123";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -44,6 +50,25 @@ export default defineConfig({
         RATE_LIMIT_FREE_BURST: "1000",
         RATE_LIMIT_ANON_PER_MINUTE: "6000",
         RATE_LIMIT_ANON_BURST: "1000",
+        // private_service refuses IP literals, so the sidecar is `localhost`.
+        AGENT_URL: "http://localhost:8090",
+        AGENT_SERVICE_TOKEN: agentServiceToken,
+        AGENT_GRANT_KEY: agentGrantKey,
+      },
+    },
+    {
+      command: "npm run start",
+      cwd: "../services/agent",
+      url: "http://127.0.0.1:8090/health",
+      reuseExistingServer: !ci,
+      timeout: 120_000,
+      stdout: "pipe",
+      env: {
+        AGENT_ADDR: "127.0.0.1:8090",
+        AGENT_API_URL: "http://127.0.0.1:8080",
+        AGENT_SERVICE_TOKEN: agentServiceToken,
+        AGENT_PROVIDER: "palsu",
+        AGENT_ALLOW_FAKE_PROVIDER: "true",
       },
     },
     {

@@ -86,10 +86,22 @@ export async function useLanguage(page: Page, lang: Lang): Promise<void> {
  * otherwise it goes through `cargo run`.
  */
 export async function completeSearches(): Promise<void> {
+  await seedE2e("complete");
+}
+
+/**
+ * Deletes the seeded accounts' match decisions, suggestions and assistant
+ * usage (`seed_e2e reset-assistant`), restoring the needs_review fixture.
+ */
+export async function resetAssistant(): Promise<void> {
+  await seedE2e("reset-assistant");
+}
+
+async function seedE2e(command: "complete" | "reset-assistant"): Promise<void> {
   const bin = process.env.E2E_SEED_BIN;
   const [file, args] = bin
-    ? [bin, ["complete"]]
-    : ["cargo", ["run", "-q", "--locked", "-p", "db", "--bin", "seed_e2e", "--", "complete"]];
+    ? [bin, [command]]
+    : ["cargo", ["run", "-q", "--locked", "-p", "db", "--bin", "seed_e2e", "--", command]];
   await run(file, args, {
     cwd: path.resolve(__dirname, "..", ".."),
     env: {

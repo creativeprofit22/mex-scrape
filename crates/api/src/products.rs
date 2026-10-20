@@ -239,7 +239,7 @@ pub(crate) async fn product_price_stats(
     let asin = parse_asin(&asin)?;
     let out = inner
         .stats
-        .for_product(&asin, user.memberships)
+        .for_product(&user.tenant, &asin, user.memberships)
         .await
         .map_err(|_| {
             tracing::warn!("reading price stats failed");
@@ -284,7 +284,7 @@ pub(crate) async fn product_price_history(
     let days = query.days.unwrap_or(MAX_SERIES_DAYS);
     match inner
         .series
-        .for_product(&asin, days, user.memberships)
+        .for_product(&user.tenant, &asin, days, user.memberships)
         .await
     {
         Ok(out) => Ok(Json(out.into())),

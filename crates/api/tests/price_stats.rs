@@ -113,9 +113,15 @@ fn enabled_with(
         Arc::new(PriceStats::new(
             prices.clone(),
             matches.clone(),
+            Arc::new(common::MemoryDecisions::default()),
             Arc::new(FixedClock),
         )),
-        Arc::new(PriceSeries::new(prices, matches, Arc::new(FixedClock))),
+        Arc::new(PriceSeries::new(
+            prices,
+            matches,
+            Arc::new(common::MemoryDecisions::default()),
+            Arc::new(FixedClock),
+        )),
     )
 }
 

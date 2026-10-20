@@ -5,6 +5,7 @@
 
 mod account;
 mod amazon;
+mod assistant;
 mod history;
 mod matching;
 mod offer;
@@ -17,6 +18,12 @@ pub use account::{
     check_new_password, is_membership_retailer,
 };
 pub use amazon::{Asin, AsinError};
+pub use assistant::{
+    AgentStop, ChatError, ChatHistory, ChatMessage, ChatRole, ChatText, MAX_AGENT_REPLY_CHARS,
+    MAX_CHAT_TEXT_CHARS, MAX_CHAT_TOTAL_CHARS, MAX_CHAT_TURNS, MAX_SUGGESTION_REASON_CHARS,
+    MatchDecision, SuggestionReason, SuggestionReasonError, TokenCount, TokenUsage,
+    clean_agent_reply, strip_control_chars,
+};
 pub use history::{DAY_MS, PriceSample, PriceWindow, STATS_WINDOWS, window_stats};
 pub use matching::{Confidence, ConfidenceError, MatchMethod, MatchStatus, ProductMatch};
 pub use offer::{

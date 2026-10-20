@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use api::{ProductsState, SearchesState};
 use app::{
-    PortFuture, RepoError, ResultMatchView, RetailerOutcomeView, SearchId, SearchRepo,
-    SearchResultView, SearchResults, SearchView, StartSearch,
+    PortFuture, RecentResultsFilter, RepoError, ResultMatchView, RetailerOutcomeView, SearchId,
+    SearchRepo, SearchResultView, SearchResults, SearchView, StartSearch, TrackedResultView,
 };
 use axum::http::{Method, StatusCode};
 use common::{Client, TestApp, generous_limits};
@@ -114,6 +114,16 @@ impl SearchRepo for FakeRepo {
             Ok(row.map(|(_, q)| view(id.0, q)))
         })
     }
+
+    fn recent_results<'a>(
+        &'a self,
+        _tenant: &'a TenantId,
+        _since: UnixMillis,
+        _filter: &'a RecentResultsFilter,
+        _limit: u32,
+    ) -> PortFuture<'a, Result<Vec<TrackedResultView>, RepoError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
 }
 
 fn app(repo: &Arc<FakeRepo>) -> TestApp {
@@ -121,7 +131,7 @@ fn app(repo: &Arc<FakeRepo>) -> TestApp {
         ProductsState::disabled(),
         SearchesState::new(
             StartSearch::new(repo.clone()),
-            SearchResults::new(repo.clone()),
+            SearchResults::new(repo.clone(), Arc::new(common::MemoryDecisions::default())),
         ),
         generous_limits(),
     )

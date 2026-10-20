@@ -5,10 +5,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use domain::{
-    Asin, Availability, DAY_MS, Memberships, PriceMxn, RetailerId, RetailerSku, UnixMillis,
+    Asin, Availability, DAY_MS, Memberships, PriceMxn, RetailerId, RetailerSku, TenantId,
+    UnixMillis,
 };
 
-use crate::ports::{Clock, MatchRepo, PriceHistoryRepo, PricePoint};
+use crate::assistant::tenant_listings;
+use crate::ports::{Clock, MatchDecisionRepo, MatchRepo, PriceHistoryRepo, PricePoint};
 use crate::price_stats::visible_listings;
 
 /// Longest series served, in days.
@@ -70,6 +72,7 @@ pub struct ProductPriceSeries {
 pub struct PriceSeries {
     prices: Arc<dyn PriceHistoryRepo>,
     matches: Arc<dyn MatchRepo>,
+    decisions: Arc<dyn MatchDecisionRepo>,
     clock: Arc<dyn Clock>,
 }
 
@@ -80,17 +83,21 @@ impl PriceSeries {
     pub fn new(
         prices: Arc<dyn PriceHistoryRepo>,
         matches: Arc<dyn MatchRepo>,
+        decisions: Arc<dyn MatchDecisionRepo>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             prices,
             matches,
+            decisions,
             clock,
         }
     }
 
     /// Daily low/high of the last `days` days for every listing with an
-    /// accepted match to `asin`. Listings from a membership store not in
+    /// accepted match to `asin`, as `tenant` sees it (its own match
+    /// decisions add or remove listings, ADR 0013). Listings from a
+    /// membership store not in
     /// `memberships` are removed and counted in
     /// [`ProductPriceSeries::hidden_listings`].
     ///
@@ -99,6 +106,7 @@ impl PriceSeries {
     /// [`PriceSeriesError::Storage`] if storage cannot be read.
     pub async fn for_product(
         &self,
+        tenant: &TenantId,
         asin: &Asin,
         days: u16,
         memberships: Memberships,
@@ -108,11 +116,10 @@ impl PriceSeries {
         }
         let now = self.clock.now();
         let since = UnixMillis(now.0.saturating_sub(i64::from(days) * DAY_MS));
-        let listings = self
-            .matches
-            .accepted_listings(asin)
-            .await
-            .map_err(|_| PriceSeriesError::Storage)?;
+        let listings =
+            tenant_listings(self.matches.as_ref(), self.decisions.as_ref(), tenant, asin)
+                .await
+                .map_err(|_| PriceSeriesError::Storage)?;
         let (listings, hidden_listings) = visible_listings(listings, memberships);
         let mut out = Vec::with_capacity(listings.len());
         for (retailer, retailer_sku) in listings {
@@ -164,6 +171,11 @@ mod tests {
     use domain::{Offer, ProductMatch};
 
     use super::*;
+    use crate::assistant::fakes::FakeDecisions;
+
+    fn me() -> domain::TenantId {
+        domain::TenantId::new("user-7").unwrap()
+    }
     use crate::ports::{PortFuture, RepoError, UpsertOutcome};
 
     // A UTC midnight.
@@ -254,6 +266,7 @@ mod tests {
         PriceSeries::new(
             Arc::new(prices),
             Arc::new(FakeMatches(keys)),
+            Arc::new(FakeDecisions::default()),
             Arc::new(FixedClock),
         )
     }
@@ -269,7 +282,7 @@ mod tests {
         ];
         let asin = Asin::new("B000000001").unwrap();
         let s = series(FakePrices(Ok(history)), 2)
-            .for_product(&asin, 30, NONE)
+            .for_product(&me(), &asin, 30, NONE)
             .await
             .unwrap();
         assert_eq!(s.since, UnixMillis(NOW - 30 * DAY_MS));
@@ -315,13 +328,13 @@ mod tests {
                 .collect();
             (names, out.hidden_listings)
         };
-        let none = s.for_product(&asin, 30, NONE).await.unwrap();
+        let none = s.for_product(&me(), &asin, 30, NONE).await.unwrap();
         assert_eq!(shown(none), (vec!["liverpool".to_owned()], 2));
         let costco = Memberships {
             costco: true,
             sams: false,
         };
-        let out = s.for_product(&asin, 30, costco).await.unwrap();
+        let out = s.for_product(&me(), &asin, 30, costco).await.unwrap();
         assert_eq!(
             shown(out),
             (vec!["costco_mx".to_owned(), "liverpool".to_owned()], 1)
@@ -333,16 +346,16 @@ mod tests {
         let asin = Asin::new("B000000001").unwrap();
         let ok = series(FakePrices(Ok(Vec::new())), 1);
         assert_eq!(
-            ok.for_product(&asin, 0, NONE).await,
+            ok.for_product(&me(), &asin, 0, NONE).await,
             Err(PriceSeriesError::InvalidDays)
         );
         assert_eq!(
-            ok.for_product(&asin, 366, NONE).await,
+            ok.for_product(&me(), &asin, 366, NONE).await,
             Err(PriceSeriesError::InvalidDays)
         );
         let bad = series(FakePrices(Err(RepoError::Unavailable)), 1);
         assert_eq!(
-            bad.for_product(&asin, 365, NONE).await,
+            bad.for_product(&me(), &asin, 365, NONE).await,
             Err(PriceSeriesError::Storage)
         );
     }

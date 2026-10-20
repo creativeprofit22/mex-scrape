@@ -21,6 +21,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistant/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the assistant about the signed-in user's tracked products (their
+         *     searches of the last 90 days): prices, seasons (Hot Sale, Buen Fin) and
+         *     uncertain matches. Runs within the plan's daily token budget.
+         */
+        post: operations["assistant_chat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/csrf": {
         parameters: {
             query?: never;
@@ -100,6 +121,124 @@ export interface paths {
         get: operations["health"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/agent/match-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose a verdict on a `needs_review` match in the user's recent
+         *     searches. Stores a suggestion only; the user confirms it in the app.
+         */
+        post: operations["agent_suggest_match"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/agent/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tracked offers (the user's searches of the last 90 days). Read-only;
+         *     never starts a search.
+         */
+        get: operations["agent_offers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/agent/products/{asin}/price-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Price stats (30/90/365 days) and the daily series of a product as this
+         *     tenant sees it (its own match decisions applied).
+         */
+        get: operations["agent_price_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/agent/roi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** ROI for up to 100 items (same calculation as `POST /roi`). */
+        post: operations["agent_roi"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/agent/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a turn's tokens to the tenant's daily total; answers what is left
+         *     (authoritative; the sidecar stops at 0).
+         */
+        post: operations["agent_usage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/matches/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept or reject a `needs_review` match in one of the signed-in user's
+         *     recent searches. Only this user's tenant sees the change (search
+         *     results and price stats); the decision records who made it.
+         */
+        post: operations["decide_match"];
         delete?: never;
         options?: never;
         head?: never;
@@ -267,6 +406,100 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description One tracked offer. */
+        AgentOfferResponse: {
+            /** @description The offer, with this tenant's match decisions applied. */
+            offer: components["schemas"]["SearchResultResponse"];
+            /**
+             * Format: int64
+             * @description Search it was found by.
+             */
+            search_id: number;
+            /**
+             * Format: int64
+             * @description When that search ran (epoch milliseconds).
+             */
+            seen_at_ms: number;
+        };
+        /** @description The tenant's tracked offers. */
+        AgentOffersResponse: {
+            /**
+             * Format: int32
+             * @description Offers hidden because they need a membership the user lacks.
+             */
+            hidden: number;
+            /** @description Newest first. */
+            offers: components["schemas"]["AgentOfferResponse"][];
+        };
+        /** @description Price stats and daily history of a product. */
+        AgentPriceHistoryResponse: {
+            /** @description Daily low/high per listing over the requested days. */
+            history: components["schemas"]["PriceHistoryResponse"];
+            /** @description 30/90/365-day low, high and average per listing. */
+            stats: components["schemas"]["PriceStatsResponse"];
+        };
+        /** @description Body of `POST /internal/agent/match-suggestions`. */
+        AgentSuggestionRequest: {
+            /** @description Amazon product of the match under review. */
+            asin: string;
+            /** @description `accept` or `reject`. */
+            decision: string;
+            /** @description Why, 1–300 characters. */
+            reason: string;
+            /** @description Retailer id. */
+            retailer: string;
+            /** @description The retailer's product id. */
+            retailer_sku: string;
+        };
+        /** @description Body of `POST /internal/agent/usage`: tokens of one finished turn. */
+        AgentUsageRequest: {
+            /**
+             * Format: int64
+             * @description Prompt tokens.
+             */
+            input_tokens: number;
+            /**
+             * Format: int64
+             * @description Generated tokens.
+             */
+            output_tokens: number;
+        };
+        /** @description Tokens left today. */
+        AgentUsageResponse: {
+            /**
+             * Format: int64
+             * @description Tokens the tenant may still use today (0 when spent).
+             */
+            remaining_tokens: number;
+        };
+        /** @description One chat message. */
+        ChatMessageRequest: {
+            /** @description Text, 1–2000 characters after trimming. */
+            content: string;
+            /** @description `user` or `assistant`. */
+            role: string;
+        };
+        /** @description Body of `POST /assistant/chat`: the whole conversation, oldest first. */
+        ChatRequest: {
+            /**
+             * @description 1–20 messages, at most 16 000 characters in total, the last from
+             *     the user.
+             */
+            messages: components["schemas"]["ChatMessageRequest"][];
+        };
+        /** @description The assistant's answer. */
+        ChatResponse: {
+            /** @description Id of this chat run. */
+            chat_id: string;
+            /** @description Answer text (plain text; render it escaped). */
+            reply: string;
+            /** @description `done`, `max_turns` or `token_budget`. */
+            stop: string;
+            /** @description Match suggestions made during this run. */
+            suggestions: components["schemas"]["MatchSuggestionResponse"][];
+            /** @description Tokens used. */
+            usage: components["schemas"]["TokenUsageResponse"];
+        };
         /** @description The session's CSRF token. */
         CsrfResponse: {
             /** @description Send as `X-CSRF-Token` on every non-GET request. */
@@ -327,6 +560,56 @@ export interface components {
         LocaleRequest: {
             /** @description `es` or `en`. */
             locale: string;
+        };
+        /** @description Body of `POST /matches/decisions`. */
+        MatchDecisionRequest: {
+            /** @description Amazon product of the match under review. */
+            asin: string;
+            /** @description `accept` or `reject`. */
+            decision: string;
+            /** @description Retailer id. */
+            retailer: string;
+            /** @description The retailer's product id. */
+            retailer_sku: string;
+            /**
+             * Format: int64
+             * @description The assistant suggestion being confirmed, if any.
+             */
+            suggestion_id?: number | null;
+        };
+        /** @description The stored verdict. */
+        MatchDecisionResponse: {
+            /** @description Amazon product. */
+            asin: string;
+            /** @description `accept` or `reject`. */
+            decision: string;
+            /** @description Retailer id. */
+            retailer: string;
+            /** @description The retailer's product id. */
+            retailer_sku: string;
+        };
+        /**
+         * @description A verdict the assistant proposed; nothing changes until the user
+         *     confirms it with `POST /matches/decisions`.
+         */
+        MatchSuggestionResponse: {
+            /** @description Amazon product of the match under review. */
+            asin: string;
+            /** @description `accept` or `reject`. */
+            decision: string;
+            /**
+             * Format: int64
+             * @description Suggestion id (pass it as `suggestion_id` when confirming).
+             */
+            id: number;
+            /** @description Why, in the assistant's words (untrusted text). */
+            reason: string;
+            /** @description Retailer id. */
+            retailer: string;
+            /** @description The retailer's product id. */
+            retailer_sku: string;
+            /** @description Listing title (from the user's own search results). */
+            title: string;
         };
         /** @description The account as shown to its owner. */
         MeResponse: {
@@ -688,6 +971,19 @@ export interface components {
             /** @description Keywords, 1–100 characters after trimming and collapsing spaces. */
             query: string;
         };
+        /** @description Tokens a run used. */
+        TokenUsageResponse: {
+            /**
+             * Format: int64
+             * @description Prompt tokens (including tool results).
+             */
+            input_tokens: number;
+            /**
+             * Format: int64
+             * @description Generated tokens.
+             */
+            output_tokens: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -735,6 +1031,120 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    assistant_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description The answer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `agent_busy`: a chat of this user is still running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_messages` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `agent_budget` (daily tokens used up) or plan rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `agent_failed` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `agent_unavailable` or `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `agent_timeout` */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
@@ -1029,6 +1439,452 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    agent_suggest_match: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSuggestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Suggestion stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchSuggestionResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `unauthenticated` or `invalid_grant` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_reviewable` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_suggestion` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    agent_offers: {
+        parameters: {
+            query?: {
+                /** @description Title contains this text (1–100 characters). */
+                query?: string;
+                /** @description `accepted` or `needs_review`. */
+                match_status?: string;
+                /** @description 1–20 (default 10). */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tracked offers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentOffersResponse"];
+                };
+            };
+            /** @description Invalid query string */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `unauthenticated` or `invalid_grant` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_query`, `invalid_match_status` or `invalid_limit` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    agent_price_history: {
+        parameters: {
+            query?: {
+                /** @description Days back from now, 1–365 (default 365). */
+                days?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Amazon ASIN (10 letters or digits) */
+                asin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stats and series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPriceHistoryResponse"];
+                };
+            };
+            /** @description Not a valid ASIN or query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `unauthenticated` or `invalid_grant` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `days` outside 1–365 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    agent_roi: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoiRequest"];
+            };
+        };
+        responses: {
+            /** @description One result per item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoiResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `unauthenticated` or `invalid_grant` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_amount`, `empty` or `too_many` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    agent_usage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentUsageRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentUsageResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `unauthenticated` or `invalid_grant` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_usage` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    decide_match: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MatchDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Decision stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchDecisionResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_reviewable`: not a needs-review match in your recent searches */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_decision` or `suggestion_mismatch` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
