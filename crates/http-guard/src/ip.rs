@@ -70,9 +70,64 @@ pub fn is_non_public_ip(ip: IpAddr) -> bool {
     }
 }
 
+/// True for addresses a private-service client
+/// ([`crate::TransportPolicy::private_service`]) must still never reach:
+/// link-local (including cloud metadata `169.254.0.0/16` and `fe80::/10`),
+/// multicast, broadcast and unspecified addresses. IPv4-mapped IPv6 forms
+/// are checked as IPv4. Loopback and private networks are allowed.
+#[must_use]
+pub fn is_forbidden_service_ip(ip: IpAddr) -> bool {
+    let v4 = |ip: Ipv4Addr| {
+        ip.is_link_local() || ip.is_multicast() || ip.is_broadcast() || ip.is_unspecified()
+    };
+    match ip {
+        IpAddr::V4(ip) => v4(ip),
+        IpAddr::V6(ip) => {
+            if let Some(mapped) = ip.to_ipv4_mapped() {
+                return v4(mapped);
+            }
+            let first = ip.segments()[0];
+            ip.is_unspecified() || ip.is_multicast() || (first & 0xffc0) == 0xfe80
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_non_public_ip;
+    use super::{is_forbidden_service_ip, is_non_public_ip};
+
+    #[test]
+    fn private_service_filter_keeps_private_and_drops_metadata() {
+        for allowed in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.20.0.5",
+            "192.168.1.1",
+            "::1",
+            "fd00::1",
+        ] {
+            assert!(
+                !is_forbidden_service_ip(ip(allowed)),
+                "{allowed} must be allowed"
+            );
+        }
+        for forbidden in [
+            "169.254.169.254",
+            "169.254.0.1",
+            "0.0.0.0",
+            "255.255.255.255",
+            "224.0.0.1",
+            "fe80::1",
+            "ff02::1",
+            "::",
+            "::ffff:169.254.169.254",
+        ] {
+            assert!(
+                is_forbidden_service_ip(ip(forbidden)),
+                "{forbidden} must be dropped"
+            );
+        }
+    }
     use std::net::IpAddr;
 
     fn ip(text: &str) -> IpAddr {

@@ -82,9 +82,13 @@ impl GuardedClientBuilder {
             .redirect(Policy::none())
             .connect_timeout(self.connect_timeout)
             .timeout(self.total_timeout)
-            .https_only(!self.policy.loopback_test);
+            .https_only(!self.policy.loopback_test && self.policy.private_service_port.is_none());
         let builder = if self.policy.loopback_test {
             builder
+        } else if self.policy.private_service_port.is_some() {
+            builder.dns_resolver(Arc::new(PublicOnlyResolver::private_service(Arc::clone(
+                &allowlist,
+            ))))
         } else {
             builder.dns_resolver(Arc::new(PublicOnlyResolver::new(Arc::clone(&allowlist))))
         };
@@ -176,9 +180,10 @@ impl GuardedClient {
 
     fn check_url(&self, url: &Url) -> Result<(), GuardError> {
         let loopback_test = self.policy.loopback_test;
+        let private_port = self.policy.private_service_port;
         match url.scheme() {
             "https" => {}
-            "http" if loopback_test => {}
+            "http" if loopback_test || private_port.is_some() => {}
             other => {
                 return Err(GuardError::InsecureScheme {
                     scheme: other.to_owned(),
@@ -211,7 +216,13 @@ impl GuardedClient {
                 });
             }
         }
-        if url.port().is_some() && !loopback_test {
+        if let Some(port) = private_port {
+            if url.port_or_known_default() != Some(port) {
+                return Err(GuardError::InvalidUrl(
+                    "only the configured service port is allowed".to_owned(),
+                ));
+            }
+        } else if url.port().is_some() && !loopback_test {
             return Err(GuardError::InvalidUrl(
                 "only the default port is allowed".to_owned(),
             ));

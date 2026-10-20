@@ -32,10 +32,11 @@ Secrets (defined in the [`secrets`](secrets.md) crate and re-exported here):
   - `json(&T)`, `body(bytes)`, `send().await`.
 - `GuardedResponse`: `status()`, `headers()`, the bounded readers `bytes(max)`, `text(max)` and `json::<T>(max)`, `error_text(max)` (bounded, redacted, truncated provider error body) and `sanitize(&str)`.
 - `HostAllowlist::new([...])`, `contains`, `iter` (sorted).
+- `TransportPolicy::private_service(port)` ([ADR 0013](../decisions/0013-assistant-sidecar-interface.md)): for one private in-cluster service (the assistant sidecar). Allows plain `http` (or `https`) to allowlisted DNS names on exactly `port`; IP literals, userinfo, other ports and other hosts stay refused. DNS answers may be loopback or private (RFC 1918, unique-local), but link-local (including `169.254.169.254`, `fe80::/10`), multicast, broadcast and unspecified answers are dropped (`is_forbidden_service_ip`). No redirects, no proxy, bounded bodies and redaction are unchanged. Opt-in per client; `GuardedWebSocket` ignores it and stays `wss`-only.
 - `TransportPolicy::PUBLIC_HTTPS`. `TransportPolicy::LOOPBACK_TEST` (test-only: allows plain http and any port, accepts loopback IP literals in addition to allowlisted names, and disables the public-only DNS resolver, so allowlisted names may resolve to private addresses) exists only with the `test-support` feature.
 - `GuardError`, with `is_timeout()` and `is_transient()` for retry decisions.
 - `Secret` (`new`, `from_lookup`, `from_env`, `expose_secret`), `SecretError`, `Redactor` (`new`, `with`, `redact`, `sanitize`), `truncate_error_message`.
-- `is_non_public_ip`, `is_non_public_ipv4`, `is_non_public_ipv6`.
+- `is_non_public_ip`, `is_non_public_ipv4`, `is_non_public_ipv6`, `is_forbidden_service_ip`.
 - Constants: `DEFAULT_MAX_RESPONSE_BYTES` (8 MiB), `SMALL_RESPONSE_BYTES` (256 KiB, for tokens and error bodies), `MAX_ERROR_MESSAGE_CHARS` (500), `DEFAULT_CONNECT_TIMEOUT`, `DEFAULT_TOTAL_TIMEOUT`.
 - `GuardedWebSocket` ([ADR 0007](../decisions/0007-brightdata-browser-api.md)), the only WebSocket client, used for the Bright Data Browser API. `GuardedWebSocket::builder(HostAllowlist, port)` takes `.policy()`, `.connect_timeout()` (DNS + TCP + TLS + handshake), `.max_message_bytes()` (default 8 MiB) and `.redactor()`. `.connect(&Url, basic_auth: Option<(&Secret, &Secret)>)` allows `wss` only, an allowlisted host, the one configured port and no userinfo. It sends credentials only as a sensitive `Authorization: Basic` header (both parts are redacted from errors), uses no proxy and accepts only public DNS answers. The socket provides `send_text`, `recv_text` (text frames only; larger messages fail with `BodyTooLarge`) and `close`. Errors are `GuardError`s that never contain the URL. With `test-support`, `test_support::serve(script)` starts a loopback fake WebSocket server (`FakePeer::recv`/`send`, `headers()`, `finished()`).
 - Re-exports `Method`, `StatusCode`, `Url` and `header`, so callers never need reqwest themselves. Build query strings with `Url::query_pairs_mut`.
@@ -46,6 +47,7 @@ Secrets (defined in the [`secrets`](secrets.md) crate and re-exported here):
 - Build one `GuardedClient` per provider, with only that provider's hosts:
   - Bright Data: `api.brightdata.com`; Browser API WebSocket: `brd.superproxy.io`, port 9222 only.
   - SP-API: `sellingpartnerapi-na.amazon.com`, plus `api.amazon.com` for LWA tokens.
+  - Assistant sidecar (`api` only): the `AGENT_URL` host (e.g. `localhost` or `agent`) with `TransportPolicy::private_service(port)`.
 - Give the client a `Redactor` over every secret it sends.
 - Send secrets only through `secret_header`, `bearer` or a `FormValue::Secret` form field, never in URLs.
 - Read every body with an explicit cap: `SMALL_RESPONSE_BYTES` for tokens and error bodies, `DEFAULT_MAX_RESPONSE_BYTES` or smaller otherwise.

@@ -1,12 +1,14 @@
 //! DNS resolver that only answers for allowlisted hosts and drops
-//! loopback/private/link-local addresses (DNS-rebinding guard).
+//! loopback/private/link-local addresses (DNS-rebinding guard). In
+//! private-service mode (ADR 0013) loopback and private answers are kept
+//! but link-local/metadata, multicast and unspecified ones are still dropped.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 
-use crate::ip::is_non_public_ip;
+use crate::ip::{is_forbidden_service_ip, is_non_public_ip};
 use crate::policy::HostAllowlist;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -15,11 +17,23 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 #[derive(Debug)]
 pub(crate) struct PublicOnlyResolver {
     allowlist: Arc<HostAllowlist>,
+    private_service: bool,
 }
 
 impl PublicOnlyResolver {
     pub(crate) fn new(allowlist: Arc<HostAllowlist>) -> Self {
-        Self { allowlist }
+        Self {
+            allowlist,
+            private_service: false,
+        }
+    }
+
+    /// Resolver for [`crate::TransportPolicy::private_service`].
+    pub(crate) fn private_service(allowlist: Arc<HostAllowlist>) -> Self {
+        Self {
+            allowlist,
+            private_service: true,
+        }
     }
 }
 
@@ -27,6 +41,7 @@ impl Resolve for PublicOnlyResolver {
     fn resolve(&self, name: Name) -> Resolving {
         let host = name.as_str().to_owned();
         let allowed = self.allowlist.contains(&host);
+        let private_service = self.private_service;
         Box::pin(async move {
             if !allowed {
                 return Err::<Addrs, BoxError>(
@@ -35,12 +50,21 @@ impl Resolve for PublicOnlyResolver {
             }
             let public: Vec<SocketAddr> = tokio::net::lookup_host((host.as_str(), 0))
                 .await?
-                .filter(|address| !is_non_public_ip(address.ip()))
+                .filter(|address| {
+                    if private_service {
+                        !is_forbidden_service_ip(address.ip())
+                    } else {
+                        !is_non_public_ip(address.ip())
+                    }
+                })
                 .collect();
             if public.is_empty() {
-                return Err(
-                    "destination host resolves only to local or private network addresses".into(),
-                );
+                let why = if private_service {
+                    "destination host resolves only to link-local, multicast or unspecified addresses"
+                } else {
+                    "destination host resolves only to local or private network addresses"
+                };
+                return Err(why.into());
             }
             Ok(Box::new(public.into_iter()) as Addrs)
         })
@@ -67,6 +91,22 @@ mod tests {
             .err()
             .expect("localhost must not resolve for public destinations");
         assert!(error.to_string().contains("private network"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn private_service_resolver_keeps_loopback_answers() {
+        let resolver = PublicOnlyResolver::private_service(Arc::new(
+            HostAllowlist::new(["localhost"]).unwrap(),
+        ));
+        let addrs: Vec<_> = resolver
+            .resolve("localhost".parse().unwrap())
+            .await
+            .expect("localhost resolves for a private service")
+            .collect();
+        assert!(!addrs.is_empty());
+        assert!(addrs.iter().all(|a| a.ip().is_loopback()), "{addrs:?}");
+        let off_list = resolver.resolve("example.com".parse().unwrap()).await;
+        assert!(off_list.is_err());
     }
 
     #[tokio::test]

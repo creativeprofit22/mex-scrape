@@ -38,7 +38,7 @@ pub use client::{
     GuardedClient, GuardedClientBuilder, GuardedRequest, GuardedResponse, SMALL_RESPONSE_BYTES,
 };
 pub use error::GuardError;
-pub use ip::{is_non_public_ip, is_non_public_ipv4, is_non_public_ipv6};
+pub use ip::{is_forbidden_service_ip, is_non_public_ip, is_non_public_ipv4, is_non_public_ipv6};
 pub use policy::{HostAllowlist, TransportPolicy};
 pub use reqwest::{Method, StatusCode, Url, header};
 pub use secrets::{MAX_ERROR_MESSAGE_CHARS, Redactor, Secret, SecretError, truncate_error_message};

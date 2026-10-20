@@ -10,6 +10,10 @@ use crate::error::GuardError;
 pub struct TransportPolicy {
     /// Plain http, loopback IP literals, any port and private DNS answers.
     pub(crate) loopback_test: bool,
+    /// `Some(port)`: an in-cluster service (ADR 0013). Plain http or https,
+    /// exactly this port, allowlisted names whose DNS answers may be
+    /// loopback or private but never link-local, multicast or unspecified.
+    pub(crate) private_service_port: Option<u16>,
 }
 
 impl TransportPolicy {
@@ -17,7 +21,23 @@ impl TransportPolicy {
     /// ports, private DNS answers dropped.
     pub const PUBLIC_HTTPS: Self = Self {
         loopback_test: false,
+        private_service_port: None,
     };
+
+    /// A private in-cluster service such as the assistant sidecar
+    /// (ADR 0013): allows plain `http` (and `https`) to allowlisted DNS
+    /// names on exactly `port`. DNS answers may be loopback or private
+    /// (RFC 1918, unique-local) addresses, but link-local (including cloud
+    /// metadata `169.254.169.254` and `fe80::/10`), multicast, broadcast and
+    /// unspecified addresses are still dropped. IP literals stay refused;
+    /// redirects, proxies, body caps and redaction are unchanged.
+    #[must_use]
+    pub const fn private_service(port: u16) -> Self {
+        Self {
+            loopback_test: false,
+            private_service_port: Some(port),
+        }
+    }
 
     /// Test-only: allows plain http and any port, accepts loopback IP
     /// literals in addition to allowlisted names, and disables the
@@ -27,6 +47,7 @@ impl TransportPolicy {
     #[cfg(any(test, feature = "test-support"))]
     pub const LOOPBACK_TEST: Self = Self {
         loopback_test: true,
+        private_service_port: None,
     };
 }
 

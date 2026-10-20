@@ -403,3 +403,55 @@ async fn form_bodies_are_url_encoded_and_their_secrets_redacted() {
     );
     assert!(!format!("{:?}", FormValue::Secret(&key)).contains(FAKE_KEY));
 }
+
+fn private_service_client(port: u16) -> GuardedClient {
+    GuardedClient::builder(allowlist(&["localhost"]))
+        .policy(TransportPolicy::private_service(port))
+        .redactor(Redactor::new([&fake_key()]))
+        .build()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn private_service_reaches_an_allowlisted_name_on_its_port_over_http() {
+    let (base, handle) =
+        serve_once(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok".to_vec())
+            .await;
+    let port: u16 = base.rsplit(':').next().unwrap().parse().unwrap();
+    let client = private_service_client(port);
+    let response = client
+        .get(&url(&format!("http://localhost:{port}/v1/chat")))
+        .unwrap()
+        .bearer(&fake_key())
+        .unwrap()
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.text(16).await.unwrap(), "ok");
+    let request = handle.await.unwrap();
+    assert!(request.starts_with("GET /v1/chat"), "{request}");
+}
+
+#[tokio::test]
+async fn private_service_refuses_other_ports_literals_hosts_and_schemes() {
+    let client = private_service_client(8090);
+    for refused in [
+        "http://localhost:8091/",
+        "http://localhost/",
+        "https://localhost/",
+        "http://127.0.0.1:8090/",
+        "http://169.254.169.254:8090/",
+        "http://[::1]:8090/",
+        "http://evil.example.com:8090/",
+        "http://user:pw@localhost:8090/",
+        "ftp://localhost:8090/",
+    ] {
+        assert!(
+            client.get(&url(refused)).is_err(),
+            "{refused} must be refused"
+        );
+    }
+    assert!(client.get(&url("http://localhost:8090/v1/chat")).is_ok());
+    assert!(client.get(&url("https://localhost:8090/v1/chat")).is_ok());
+}
