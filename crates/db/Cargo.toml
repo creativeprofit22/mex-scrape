@@ -13,6 +13,7 @@ workspace = true
 anyhow.workspace = true
 app.workspace = true
 domain.workspace = true
+password-auth.workspace = true
 secrets.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true

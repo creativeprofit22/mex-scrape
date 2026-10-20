@@ -4,7 +4,7 @@
 //! refuses every record with fixed text, which leaves a downloaded run
 //! `ready` and resumable (the snapshot stays on Bright Data for 24 h).
 //!
-//! Amazon fallback lookups (scope `system`/`amazon_mx_fallback`) are not
+//! Amazon fallback lookups (job `amazon_mx_fallback`, any tenant) are not
 //! resumed: their result was only useful to the caller that died with the
 //! worker, and while active they would block every new fallback lookup.
 //! They are failed with [`FALLBACK_INTERRUPTED`] instead.
@@ -19,15 +19,14 @@ use http_guard::{Redactor, Secret};
 use serde_json::Value;
 
 /// Returned for every result until a product importer is registered.
-pub(crate) const NO_IMPORTER: &str =
+pub const NO_IMPORTER: &str =
     "No importer is registered for Bright Data results yet; the run stays resumable";
 
 /// Stored on Amazon fallback runs interrupted by a worker stop.
-pub(crate) const FALLBACK_INTERRUPTED: &str =
-    "Amazon fallback lookup interrupted; its caller is gone";
+pub const FALLBACK_INTERRUPTED: &str = "Amazon fallback lookup interrupted; its caller is gone";
 
 /// Placeholder [`RunSink`]: refuses pages and records with [`NO_IMPORTER`].
-pub(crate) struct RefusingSink;
+pub struct RefusingSink;
 
 impl RunSink for RefusingSink {
     async fn accept_page(&self, _url: &TargetUrl, _page: UnlockedPage) -> Result<(), String> {
@@ -43,7 +42,7 @@ impl RunSink for RefusingSink {
 /// then fail the key gate, closed). `browser_zone` is optional: without it
 /// Browser API fetches fail terminally. Logs name settings only; client
 /// errors pass through `redactor`.
-pub(crate) fn client(
+pub fn client(
     api_key: Option<Secret>,
     unlocker_zone: Option<Secret>,
     browser_zone: Option<Secret>,
@@ -72,22 +71,23 @@ pub(crate) fn client(
 
 /// How the kept runs ended up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) struct ResumeReport {
+pub struct ResumeReport {
     /// Runs now terminal (imported, failed or cancelled).
-    pub(crate) finished: u32,
+    pub finished: u32,
     /// Runs still active (still collecting, refused by the sink, or a
     /// transient error); resumable later.
-    pub(crate) active: u32,
+    pub active: u32,
     /// Resumes refused (a gate, an invalid run or storage); the run is
     /// left as it was.
-    pub(crate) refused: u32,
+    pub refused: u32,
     /// Amazon fallback runs failed instead of resumed.
-    pub(crate) abandoned: u32,
+    pub abandoned: u32,
 }
 
-/// True for the Amazon fallback's run scope.
+/// True for an Amazon fallback run scope: job `amazon_mx_fallback`, for
+/// any paying tenant.
 fn is_amazon_fallback(scope: &RunScope) -> bool {
-    scope.tenant_id() == amazon::FALLBACK_TENANT && scope.job() == amazon::FALLBACK_JOB
+    scope.job() == amazon::FALLBACK_JOB
 }
 
 /// Fails `id` with [`FALLBACK_INTERRUPTED`] when it is an Amazon fallback
@@ -119,7 +119,7 @@ async fn abandon_fallback<T: Transport, S: RunStore, C: Clock>(
 
 /// Resumes each kept run in order, except Amazon fallback runs, which are
 /// failed (see the module docs). The caller must hold the driver lock.
-pub(crate) async fn resume_kept<T: Transport, S: RunStore, C: Clock>(
+pub async fn resume_kept<T: Transport, S: RunStore, C: Clock>(
     runner: &Runner<'_, T, S, C>,
     kept: &[RunId],
     sink: &impl RunSink,
@@ -388,6 +388,7 @@ mod tests {
         let store = MemStore(Mutex::new(vec![
             running(1, amazon::FALLBACK_TENANT, amazon::FALLBACK_JOB),
             running(2, "tenant-1", "amazon"),
+            running(3, "default", amazon::FALLBACK_JOB),
         ]));
         let runner: Runner<'_, BrightDataClient, _, _> = Runner {
             transport: None,
@@ -398,19 +399,23 @@ mod tests {
             robots: None,
         };
         let redactor = Redactor::default();
-        let report = resume_kept(&runner, &[RunId(1), RunId(2)], &RefusingSink, &redactor).await;
+        let kept = [RunId(1), RunId(2), RunId(3)];
+        let report = resume_kept(&runner, &kept, &RefusingSink, &redactor).await;
         // Run 2 is still resumed (and, without a key, refused by the gate).
         assert_eq!(
             report,
             ResumeReport {
                 refused: 1,
-                abandoned: 1,
+                abandoned: 2,
                 ..ResumeReport::default()
             }
         );
-        let fallback = store.load_run(RunId(1)).await.unwrap().unwrap();
-        assert_eq!(fallback.status, RunStatus::Failed);
-        assert_eq!(fallback.error_message, FALLBACK_INTERRUPTED);
+        // Fallback runs fail whichever tenant paid for them.
+        for id in [RunId(1), RunId(3)] {
+            let fallback = store.load_run(id).await.unwrap().unwrap();
+            assert_eq!(fallback.status, RunStatus::Failed);
+            assert_eq!(fallback.error_message, FALLBACK_INTERRUPTED);
+        }
         let active: Vec<RunId> = store
             .active_runs()
             .await

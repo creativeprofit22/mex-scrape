@@ -456,6 +456,19 @@ mod tests {
     }
 
     #[test]
+    fn registry_membership_flags_match_the_domain_helper() {
+        for r in all() {
+            let id = domain::RetailerId::new(r.id).unwrap();
+            assert_eq!(
+                r.membership_required,
+                domain::is_membership_retailer(&id),
+                "{}",
+                r.id
+            );
+        }
+    }
+
+    #[test]
     fn host_lookup_is_case_insensitive_and_unknown_is_none() {
         assert_eq!(
             retailer_for_host("WWW.Liverpool.com.mx").unwrap().id,

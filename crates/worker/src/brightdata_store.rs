@@ -17,14 +17,14 @@ const STORAGE_ERROR: &str = "Bright Data run storage failed";
 const INVALID_ROW: &str = "A stored Bright Data run is invalid";
 
 /// [`RunStore`] over the `brightdata_runs` and `safety_settings` tables.
-pub(crate) struct PgRunStore {
+pub struct PgRunStore {
     pool: PgPool,
     redactor: Redactor,
 }
 
 impl PgRunStore {
     /// `redactor` must cover the database URL (`DatabaseUrl::redactor`).
-    pub(crate) fn new(pool: PgPool, redactor: Redactor) -> Self {
+    pub fn new(pool: PgPool, redactor: Redactor) -> Self {
         Self { pool, redactor }
     }
 

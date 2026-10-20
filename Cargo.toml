@@ -24,8 +24,20 @@ secrets = { path = "crates/secrets" }
 
 # External crates (exact versions resolved in Cargo.lock)
 anyhow = "1.0.104"
+async-trait = "0.1.92"
 axum = "0.8.9"
+# axum-login 0.18 targets tower-sessions 0.14; tower-sessions-sqlx-store needs
+# sqlx 0.8, so the session store is our own (`api::auth::store`, ADR 0012).
+axum-login = "=0.18.0"
+governor = "=0.10.4"
+password-auth = "=1.0.0"
+subtle = "2.6.1"
+time = "0.3.55"
+tower-sessions = { version = "=0.14.0", default-features = false, features = ["axum-core"] }
+tower_governor = { version = "=0.8.0", default-features = false, features = ["axum"] }
 base64 = "0.22.1"
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
+croner = "4.0.1"
 futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 http-body-util = "0.1.5"
 rustls-platform-verifier = "0.7.1"

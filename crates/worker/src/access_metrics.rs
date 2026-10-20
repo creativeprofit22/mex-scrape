@@ -5,7 +5,7 @@ use app::AccessReport;
 
 /// Logs one line per retailer. Storage errors are logged and swallowed:
 /// metrics never fail a run.
-pub(crate) async fn log_access_metrics(report: &AccessReport) {
+pub async fn log_access_metrics(report: &AccessReport) {
     match report.per_retailer().await {
         Ok(totals) => {
             for (retailer, total) in totals {

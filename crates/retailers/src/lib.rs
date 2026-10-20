@@ -9,6 +9,7 @@
 //! adapters with an injected [`PageFetcher`].
 
 mod adapter;
+pub mod category;
 pub mod fixture;
 pub mod health;
 pub mod parse;

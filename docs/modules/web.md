@@ -2,18 +2,47 @@
 
 ## Purpose
 
-Next.js (App Router, TypeScript) front end in `web/`. Spanish default copy. Talks to the backend only through the typed client generated from the `api` OpenAPI spec.
+Next.js 16 (App Router, TypeScript) front end in `web/`. Spanish by default, English on request ([ADR 0012](../decisions/0012-session-auth-csrf-rate-limits-i18n.md)). Talks to the backend only through the typed client generated from the `api` OpenAPI spec.
 
 ## Public API
 
-- `/`: Spanish placeholder page with an API status indicator (calls `GET /health`).
-- `src/lib/api/client.ts`: `openapi-fetch` client (base URL `/backend`, proxied to `API_URL` by the `next.config.ts` rewrite). `next build` writes the destination into `.next/routes-manifest.json`, so production uses the build-time `API_URL`; setting it only when running `next start` has no effect.
-- `src/lib/api/schema.ts` and `openapi.json`: generated; regenerate with `npm --prefix web run gen:api` and commit. CI fails if they drift from the Rust code.
+Every page lives under `src/app/[lang]/` (`lang` is `es` or `en`):
+
+- `/[lang]`: home with an API status indicator (`GET /health`).
+- `/[lang]/signup`, `/[lang]/signin`: `AuthForm` (`POST /auth/signup`, `POST /auth/signin`). Afterwards it goes to `onboarding` while `onboarded` is false, else to `search`. Error codes from the API are shown in the page language.
+- `/[lang]/onboarding`: `OnboardingForm`, Costco and Sam's Club membership checkboxes (`GET /me`, `PUT /me/onboarding`).
+- `/[lang]/search`: `SearchPanel`. On mount it reads `GET /me` (`useRequireOnboarded` in `src/lib/`): a 401 goes to sign-in and `onboarded=false` goes to `/[lang]/onboarding`, so membership offers are never hidden from a user who was never asked; until `/me` answers only a `role="status"` loading line shows. One search bar; `POST /searches`, then polls `GET /searches/{id}` every 1.5 s, for up to 180 s. Results are one table sorted by retailer (then SKU), with the retailer name on each row, plus price, availability, the Amazon match or a "needs review" badge, a store link (`target="_blank" rel="noopener noreferrer"`), the per-retailer outcomes and the count of results hidden for missing memberships. Profit and ROI come from **one `POST /roi` batch** over the matched results plus the user's prep and shipping inputs.
+- `/[lang]/products/[asin]`: `PriceHistory`, gated on onboarding like the search page. The ASIN must match `^[A-Z0-9]{10}$`. An SVG line chart (with `aria-label`) of `GET /products/{asin}/price-history`, a `<details>` data table as the accessible fallback, and the 30/90/365-day low/high/average table from `GET /products/{asin}/price-stats`. Listings from membership stores the user lacks are left out by the API; a note shows `hidden_listings` when it is above zero.
+- `/[lang]/calculator`: `Calculator`, a cost form that calls the same `POST /roi`, so its numbers match the search page. Not gated on onboarding (it needs no memberships).
+- Header: links, `LanguageToggle` (English / Español; keeps the current path, sets the `lang` cookie and calls `PUT /me/locale` when signed in) and `SignOutButton` (`POST /auth/signout`).
+- Any 401 from the API sends the user to `/[lang]/signin`.
+
+### i18n rules
+
+- `src/proxy.ts` (Next 16's renamed middleware) redirects paths without a language segment to the `lang` cookie's language, else `es`. Sign-in sets the cookie from the account's saved locale.
+- `<html lang>` follows the route. Money uses `Intl.NumberFormat` with `es-MX` or `en-US` and currency MXN (`src/i18n/format.ts`).
+- All UI text lives in `src/i18n/messages/es.json` and `en.json`, loaded by `getDictionary(lang)` (`src/i18n/dictionaries.ts`). `es.json` defines the `Dictionary` type.
+- ESLint `react/jsx-no-literals` (`noStrings`, props ignored, only `·` and `/` allowed) rejects text written in JSX.
+- `scripts/check-messages.mjs` (part of `npm run lint`) fails when the two catalogs have different keys or any empty value. Add every new key to both files.
+
+### API client
+
+- `src/lib/api/client.ts`: `openapi-fetch` client, base URL `/backend` (proxied to `API_URL` by the `next.config.ts` rewrite), `credentials: "same-origin"`. A middleware fetches `GET /auth/csrf` and sets `X-CSRF-Token` on every non-GET request. `next build` writes the rewrite destination into `.next/routes-manifest.json`, so production uses the build-time `API_URL`; setting it only for `next start` has no effect.
+- Client IPs: the `/backend` rewrite forwards the browser's headers verbatim (including any `X-Forwarded-For` or `X-Real-IP` it sends) and sets none, and the api sees the Next server as the peer. For per-IP limits on sign-up and sign-in, put a front proxy (nginx/Caddy) before Next that overwrites one header with the real client IP (for example nginx `proxy_set_header X-Real-IP $remote_addr;`) and set the api's `CLIENT_IP_HEADER` to that header ([api.md](api.md#rate-limits-module-ratelimit)). Otherwise all visitors share one anonymous bucket.
+- `src/lib/api/schema.ts` and `openapi.json` are generated. Regenerate with `npm --prefix web run gen:api` and commit both; CI fails if they drift from the Rust code.
+
+### End-to-end tests (`web/e2e`)
+
+- `npm --prefix web run e2e` (Playwright, Chromium, one worker). `playwright.config.ts` starts the api (`cargo run --locked -p api`, with high rate limits) and `npm run start`, so run `npm --prefix web run build` first. Locally it reuses servers that are already running.
+- Needs Postgres with migrations and the seed: `cargo run -p db --bin seed_e2e -- seed` (see [db.md](db.md)). `DATABASE_URL` defaults to the compose database.
+- `journey.spec.ts`, for both `es` and `en`: sign in → search → product page using only the keyboard (Tab/Enter), checking the hidden Sam's result, the match badge and profit; a not-onboarded account (`E2E_PENDING_EMAIL`, seeded with `onboarded=false`) sent from the search and product pages to onboarding; and the calculator matching the search ROI. Every page gets an axe scan (WCAG 2.1 A/AA) that must report zero violations.
+- Searches are completed by `seed_e2e complete` (no worker or Bright Data). `E2E_SEED_BIN` points at a prebuilt binary; otherwise the tests use `cargo run`. `E2E_EMAIL`, `E2E_PENDING_EMAIL` and `E2E_PASSWORD` override the seeded accounts.
+- CI job `e2e` runs migrate, seed, build and the tests, and uploads the Playwright report on failure.
 
 ## Dependencies
 
 - Backend: `api` over HTTP only.
-- npm: `next`, `react`, `openapi-fetch`; dev: `openapi-typescript`, `eslint`, `typescript` (pinned in `package-lock.json`).
+- npm: `next`, `react`, `openapi-fetch`; dev: `openapi-typescript`, `eslint`, `typescript`, `@playwright/test` (1.64.1), `@axe-core/playwright` (4.14.0). All pinned in `package-lock.json`.
 
 ## Owned tables
 

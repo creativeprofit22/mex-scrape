@@ -30,9 +30,10 @@ pub const AMAZON_GLOBAL_DATASET_ID: &str = "gd_lwhideng15g8jg63s7";
 pub const AMAZON_MX_ORIGIN: &str = "https://www.amazon.com.mx";
 /// Records per discovery input (each record is billed).
 pub const LIMIT_PER_INPUT: u32 = 5;
-/// Run scope tenant for system-owned lookups.
+/// Run scope tenant of [`BrightDataAmazonSource::new`] (system-owned
+/// lookups). Per-tenant sources use [`BrightDataAmazonSource::for_tenant`].
 pub const FALLBACK_TENANT: &str = "system";
-/// Run scope job for this fallback.
+/// Run scope job of every fallback lookup, whatever the tenant.
 pub const FALLBACK_JOB: &str = "amazon_mx_fallback";
 
 /// Hosts accepted as Amazon Mexico.
@@ -83,18 +84,34 @@ pub struct BrightDataAmazonSource<T, S, C> {
 
 impl<T: Transport, S: RunStore, C: Clock> BrightDataAmazonSource<T, S, C> {
     /// A source running under scope `system` / `amazon_mx_fallback` with
-    /// the default caps and poll timing.
+    /// the default caps and poll timing (see [`Self::with_caps`]).
     ///
     /// # Errors
     ///
     /// [`RunError::Invalid`] if the fixed scope is rejected (never in
     /// practice).
     pub fn new(transport: Arc<T>, store: Arc<S>, clock: C) -> Result<Self, RunError> {
+        Self::for_tenant(transport, store, clock, FALLBACK_TENANT)
+    }
+
+    /// A source whose dataset runs are charged to `tenant` (scope
+    /// `tenant` / `amazon_mx_fallback`), so that tenant's daily Bright Data
+    /// caps apply.
+    ///
+    /// # Errors
+    ///
+    /// [`RunError::Invalid`] if `tenant` is not a valid run scope part.
+    pub fn for_tenant(
+        transport: Arc<T>,
+        store: Arc<S>,
+        clock: C,
+        tenant: &str,
+    ) -> Result<Self, RunError> {
         Ok(Self {
             transport,
             store,
             clock,
-            scope: RunScope::new(FALLBACK_TENANT, FALLBACK_JOB)?,
+            scope: RunScope::new(tenant, FALLBACK_JOB)?,
             timing: Timing::default(),
             caps: Caps::default(),
             one_at_a_time: Mutex::new(()),
@@ -105,6 +122,14 @@ impl<T: Transport, S: RunStore, C: Clock> BrightDataAmazonSource<T, S, C> {
     #[must_use]
     pub fn with_timing(mut self, timing: Timing) -> Self {
         self.timing = timing;
+        self
+    }
+
+    /// The same source with other per-tenant caps (the operator's
+    /// configured caps instead of the defaults).
+    #[must_use]
+    pub fn with_caps(mut self, caps: Caps) -> Self {
+        self.caps = caps;
         self
     }
 

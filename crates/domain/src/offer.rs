@@ -287,6 +287,17 @@ impl Availability {
             Self::Unknown => "unknown",
         }
     }
+    /// Reads a name produced by [`Self::as_str`].
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "in_stock" => Some(Self::InStock),
+            "out_of_stock" => Some(Self::OutOfStock),
+            "pre_order" => Some(Self::PreOrder),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
 }
 
 /// Milliseconds since the Unix epoch (UTC).
@@ -455,6 +466,10 @@ mod tests {
         assert_eq!(Availability::from_schema_org("PreOrder"), PreOrder);
         assert_eq!(Availability::from_schema_org("SoldOut"), OutOfStock);
         assert_eq!(Availability::from_schema_org("whatever"), Unknown);
+        for a in [InStock, OutOfStock, PreOrder, Unknown] {
+            assert_eq!(Availability::parse(a.as_str()), Some(a));
+        }
+        assert_eq!(Availability::parse("InStock"), None);
     }
 
     fn offer() -> Offer {

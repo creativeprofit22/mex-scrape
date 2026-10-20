@@ -48,6 +48,16 @@ impl MemoryStore {
         store
     }
 
+    fn scopes(&self) -> Vec<RunScope> {
+        self.state
+            .lock()
+            .unwrap()
+            .runs
+            .values()
+            .map(|r| r.scope.clone())
+            .collect()
+    }
+
     fn statuses(&self) -> Vec<RunStatus> {
         self.state
             .lock()
@@ -418,6 +428,38 @@ async fn closed_gates_are_unavailable_and_trigger_nothing() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn configured_caps_replace_the_defaults() {
+    // A keyword lookup requests 5 items (1 input x limit 5).
+    let transport = Arc::new(FakeTransport::with_records(vec![record(
+        "B0SYNTH001",
+        MX,
+        "MXN",
+        "",
+    )]));
+    let store = Arc::new(MemoryStore::enabled());
+    let caps = |max_items_per_run| Caps {
+        max_items_per_run,
+        ..Caps::default()
+    };
+    let error = source(&transport, &store)
+        .with_caps(caps(4))
+        .catalog_by_keyword("taladro")
+        .await
+        .unwrap_err();
+    assert_eq!(error, AmazonSourceError::Unavailable);
+    assert!(transport.triggers().is_empty());
+    assert!(store.statuses().is_empty());
+
+    source(&transport, &store)
+        .with_caps(caps(5))
+        .catalog_by_keyword("taladro")
+        .await
+        .unwrap();
+    assert_eq!(transport.triggers().len(), 1);
+    assert_eq!(store.statuses(), [RunStatus::Imported]);
+}
+
+#[tokio::test(start_paused = true)]
 async fn blank_keywords_are_invalid_input() {
     let transport = Arc::new(FakeTransport::default());
     let store = Arc::new(MemoryStore::enabled());
@@ -476,4 +518,33 @@ fn upc_matching_ignores_leading_zeros_and_lists() {
         assert!(!upc_matches(&json!({ "upc": upc }), &gtin), "{upc}");
     }
     assert!(!upc_matches(&json!({}), &gtin));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_tenant_source_charges_its_runs_to_that_tenant() {
+    let transport = Arc::new(FakeTransport::with_records(Vec::new()));
+    let store = Arc::new(MemoryStore::enabled());
+    let tenant = BrightDataAmazonSource::for_tenant(
+        Arc::clone(&transport),
+        Arc::clone(&store),
+        FixedClock,
+        "default",
+    )
+    .unwrap();
+    let gtin = Gtin::new("0012345678905").unwrap();
+    tenant.catalog_by_gtin(&gtin).await.unwrap();
+    source(&transport, &store)
+        .catalog_by_gtin(&gtin)
+        .await
+        .unwrap();
+    assert_eq!(
+        store.scopes(),
+        [
+            RunScope::new("default", FALLBACK_JOB).unwrap(),
+            RunScope::new(FALLBACK_TENANT, FALLBACK_JOB).unwrap(),
+        ]
+    );
+    assert!(
+        BrightDataAmazonSource::for_tenant(transport, store, FixedClock, "bad tenant").is_err()
+    );
 }

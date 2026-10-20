@@ -45,6 +45,329 @@
         ]
       }
     },
+    "/auth/csrf": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "The session's CSRF token, created on first use (signed in or not).",
+        "operationId": "csrf_token",
+        "responses": {
+          "200": {
+            "description": "The token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Session could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/signin": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Signs in with e-mail and password.",
+        "operationId": "sign_in",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_credentials`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Missing fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Session could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": []
+          }
+        ]
+      }
+    },
+    "/auth/signout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Ends the session (deletes it server-side and expires the cookie).",
+        "operationId": "sign_out",
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Session could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": [],
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Creates an account and signs it in.",
+        "operationId": "sign_up",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Account created and signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`email_taken`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_email`, `weak_password` or `invalid_locale`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Session could not be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "summary": "Report that the API process is alive (does not check the database).",
@@ -63,9 +386,351 @@
         }
       }
     },
+    "/me": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "The signed-in account.",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "The account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/me/locale": {
+      "put": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Stores the user's preferred language.",
+        "operationId": "update_locale",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocaleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_locale`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": [],
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/me/onboarding": {
+      "put": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Stores the user's store memberships and completes onboarding. Offers\nthat need a membership the user lacks are hidden from search results.",
+        "operationId": "update_onboarding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Missing fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": [],
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/products/{asin}/price-history": {
+      "get": {
+        "tags": [
+          "products"
+        ],
+        "summary": "Daily low/high price per matched retailer listing, for the product\nchart. Listings needing a membership the user lacks are left out and\ncounted.",
+        "operationId": "product_price_history",
+        "parameters": [
+          {
+            "name": "asin",
+            "in": "path",
+            "description": "Amazon ASIN (10 letters or digits)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Days back from now, 1–365 (default 365).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 365,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily series per listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceHistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid ASIN or query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`days` outside 1–365",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plan rate limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Price history could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Price history is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ]
+      }
+    },
     "/products/{asin}/price-stats": {
       "get": {
-        "summary": "Lowest, highest and average retailer price over 30, 90 and 365 days for\nevery retailer listing matched (accepted) to an Amazon product.",
+        "tags": [
+          "products"
+        ],
+        "summary": "Lowest, highest and average retailer price over 30, 90 and 365 days for\nevery retailer listing matched (accepted) to an Amazon product. Listings\nneeding a membership the user lacks are left out and counted.",
         "operationId": "product_price_stats",
         "parameters": [
           {
@@ -90,20 +755,415 @@
             }
           },
           "400": {
-            "description": "Not a valid ASIN"
+            "description": "Not a valid ASIN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plan rate limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "Price history could not be read"
+            "description": "Price history could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Price history is not configured"
+            "description": "Price history is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/roi": {
+      "post": {
+        "tags": [
+          "roi"
+        ],
+        "summary": "Profit, ROI and margin per unit for up to 100 items, using the same\ncalculation as search results.",
+        "operationId": "calculate_roi",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "One result per item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalid_amount`, `empty` or `too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plan rate limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Accounts are not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": [],
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/searches": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Enqueue a background search across retailers and Amazon for the\nsigned-in user.",
+        "operationId": "start_search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Search enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Missing, empty or too long query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plan rate limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Search could not be enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Search API is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrf_token": [],
+            "session_cookie": []
+          }
+        ]
+      }
+    },
+    "/searches/{id}": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "A search of the signed-in user: status, per-retailer outcomes and\nresults with ROI. Results needing a membership the user lacks are left\nout and counted in `hidden_results`.",
+        "operationId": "get_search",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Search id from `POST /searches`",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such search for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plan rate limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Search could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Search API is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ]
       }
     }
   },
   "components": {
     "schemas": {
+      "CsrfResponse": {
+        "type": "object",
+        "description": "The session's CSRF token.",
+        "required": [
+          "csrf_token"
+        ],
+        "properties": {
+          "csrf_token": {
+            "type": "string",
+            "description": "Send as `X-CSRF-Token` on every non-GET request."
+          }
+        }
+      },
+      "DailyPriceResponse": {
+        "type": "object",
+        "description": "One UTC day of a listing's prices.",
+        "required": [
+          "day_ms",
+          "low_centavos",
+          "high_centavos",
+          "in_stock"
+        ],
+        "properties": {
+          "day_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Start of the UTC day (epoch milliseconds)."
+          },
+          "high_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Highest price seen that day, in centavos."
+          },
+          "in_stock": {
+            "type": "boolean",
+            "description": "Whether any observation that day was in stock."
+          },
+          "low_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Lowest price seen that day, in centavos."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Error body: a fixed, machine-readable code (the web app translates it).",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "E.g. `invalid_email`, `weak_password`, `email_taken`,\n`invalid_credentials`, `unauthenticated`, `csrf`, `rate_limited`."
+          }
+        }
+      },
       "HealthResponse": {
         "type": "object",
         "description": "Liveness response for `GET /health`.",
@@ -114,6 +1174,32 @@
           "status": {
             "type": "string",
             "description": "Always `\"ok\"` when the process is serving requests."
+          }
+        }
+      },
+      "ListingPriceSeriesResponse": {
+        "type": "object",
+        "description": "Daily prices for one retailer listing matched to the product.",
+        "required": [
+          "retailer",
+          "retailer_sku",
+          "points"
+        ],
+        "properties": {
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyPriceResponse"
+            },
+            "description": "Days with observations, oldest first."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id, e.g. `walmart_mx`."
+          },
+          "retailer_sku": {
+            "type": "string",
+            "description": "The retailer's product id."
           }
         }
       },
@@ -143,13 +1229,129 @@
           }
         }
       },
+      "LocaleRequest": {
+        "type": "object",
+        "description": "Body of `PUT /me/locale`.",
+        "required": [
+          "locale"
+        ],
+        "properties": {
+          "locale": {
+            "type": "string",
+            "description": "`es` or `en`."
+          }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "description": "The account as shown to its owner.",
+        "required": [
+          "id",
+          "email",
+          "plan",
+          "has_costco",
+          "has_sams",
+          "onboarded",
+          "locale"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Normalized e-mail address."
+          },
+          "has_costco": {
+            "type": "boolean",
+            "description": "Holds a Costco membership."
+          },
+          "has_sams": {
+            "type": "boolean",
+            "description": "Holds a Sam's Club membership."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "User id."
+          },
+          "locale": {
+            "type": "string",
+            "description": "Preferred language: `es` or `en`."
+          },
+          "onboarded": {
+            "type": "boolean",
+            "description": "Whether onboarding (memberships) is done."
+          },
+          "plan": {
+            "type": "string",
+            "description": "`free` or `pro`."
+          }
+        }
+      },
+      "OnboardingRequest": {
+        "type": "object",
+        "description": "Body of `PUT /me/onboarding`.",
+        "required": [
+          "has_costco",
+          "has_sams"
+        ],
+        "properties": {
+          "has_costco": {
+            "type": "boolean",
+            "description": "Holds a Costco membership."
+          },
+          "has_sams": {
+            "type": "boolean",
+            "description": "Holds a Sam's Club membership."
+          }
+        }
+      },
+      "PriceHistoryResponse": {
+        "type": "object",
+        "description": "Daily price series for an Amazon product across matched listings.",
+        "required": [
+          "asin",
+          "since_ms",
+          "as_of_ms",
+          "listings",
+          "hidden_listings"
+        ],
+        "properties": {
+          "as_of_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "End of the series (epoch milliseconds)."
+          },
+          "asin": {
+            "type": "string",
+            "description": "The Amazon product."
+          },
+          "hidden_listings": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Listings left out because they need a store membership (Costco,\nSam's Club) the user lacks.",
+            "minimum": 0
+          },
+          "listings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingPriceSeriesResponse"
+            },
+            "description": "One entry per accepted listing the user may see, sorted by retailer\nthen SKU."
+          },
+          "since_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Start of the series (epoch milliseconds)."
+          }
+        }
+      },
       "PriceStatsResponse": {
         "type": "object",
         "description": "Price stats for an Amazon product across matched retailer listings.",
         "required": [
           "asin",
           "as_of_ms",
-          "listings"
+          "listings",
+          "hidden_listings"
         ],
         "properties": {
           "as_of_ms": {
@@ -161,12 +1363,18 @@
             "type": "string",
             "description": "The Amazon product."
           },
+          "hidden_listings": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Listings left out because they need a store membership (Costco,\nSam's Club) the user lacks.",
+            "minimum": 0
+          },
           "listings": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ListingPriceStatsResponse"
             },
-            "description": "One entry per accepted listing, sorted by retailer then SKU."
+            "description": "One entry per accepted listing the user may see, sorted by retailer\nthen SKU."
           }
         }
       },
@@ -257,12 +1465,455 @@
             "description": "URLs skipped because robots.txt disallows them."
           }
         }
+      },
+      "RoiItemRequest": {
+        "type": "object",
+        "description": "One item to evaluate. Amounts are integer centavos (0 or more).",
+        "required": [
+          "sell_price_centavos",
+          "buy_price_centavos",
+          "amazon_fees_centavos"
+        ],
+        "properties": {
+          "amazon_fees_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amazon fees for one unit at the selling price."
+          },
+          "buy_price_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Retailer purchase price."
+          },
+          "monthly_fixed_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monthly fixed costs spread over `units_per_month`."
+          },
+          "prep_fee_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Prep-center fee per unit."
+          },
+          "sell_price_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amazon selling price."
+          },
+          "shipping_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Inbound shipping per unit."
+          },
+          "units_per_month": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Units sold per month (needed when monthly fixed costs are set).",
+            "minimum": 0
+          }
+        }
+      },
+      "RoiItemResponse": {
+        "type": "object",
+        "description": "Result for one item, in input order. Money is centavos, ratios basis\npoints. `error` is set (and the numbers absent) when the item cannot be\ncomputed.",
+        "properties": {
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`zero_units` (fixed costs without units) or `overflow`."
+          },
+          "fixed_cost_per_unit_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Share of the monthly fixed costs per unit."
+          },
+          "margin_bp": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Profit over selling price."
+          },
+          "profit_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Profit per unit (negative for a loss)."
+          },
+          "roi_bp": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Profit over total cost."
+          },
+          "total_cost_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Buy + prep + shipping + fixed share."
+          }
+        }
+      },
+      "RoiRequest": {
+        "type": "object",
+        "description": "Body of `POST /roi`.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoiItemRequest"
+            },
+            "description": "1–100 items."
+          }
+        }
+      },
+      "RoiResponse": {
+        "type": "object",
+        "description": "Body of a `POST /roi` response.",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoiItemResponse"
+            },
+            "description": "One result per item, in input order."
+          }
+        }
+      },
+      "SearchCreatedResponse": {
+        "type": "object",
+        "description": "A search was enqueued.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Id to poll with `GET /searches/{id}`."
+          }
+        }
+      },
+      "SearchMatchResponse": {
+        "type": "object",
+        "description": "Amazon match and ROI for one result. Money is integer centavos and\nratios are basis points.",
+        "required": [
+          "asin",
+          "match_status",
+          "confidence_bp"
+        ],
+        "properties": {
+          "amazon_price_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Amazon selling price used (buy box, else lowest new), in centavos."
+          },
+          "asin": {
+            "type": "string",
+            "description": "Matched Amazon product."
+          },
+          "confidence_bp": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Matcher confidence, basis points (0–10000).",
+            "minimum": 0
+          },
+          "fees_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Estimated Amazon fees at that price, in centavos."
+          },
+          "margin_bp": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Profit over selling price, basis points."
+          },
+          "match_status": {
+            "type": "string",
+            "description": "`accepted` or `needs_review`."
+          },
+          "profit_centavos": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Profit per unit, in centavos (negative for a loss)."
+          },
+          "roi_bp": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Profit over total cost, basis points."
+          }
+        }
+      },
+      "SearchResponse": {
+        "type": "object",
+        "description": "A search with its status, per-retailer outcomes and results.",
+        "required": [
+          "id",
+          "query",
+          "status",
+          "created_at_ms",
+          "retailers",
+          "results",
+          "hidden_results"
+        ],
+        "properties": {
+          "created_at_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the search was created (epoch milliseconds)."
+          },
+          "finished_at_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When it finished (epoch milliseconds)."
+          },
+          "hidden_results": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Results hidden because they need a store membership the user lacks.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Search id."
+          },
+          "query": {
+            "type": "string",
+            "description": "The cleaned query."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Fixed reason code for `partial`, `failed` or `refused`."
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResultResponse"
+            },
+            "description": "Results, sorted by retailer then SKU."
+          },
+          "retailers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchRetailerResponse"
+            },
+            "description": "Per-retailer outcomes, sorted by retailer."
+          },
+          "status": {
+            "type": "string",
+            "description": "`queued`, `running`, `done`, `partial`, `failed` or `refused`."
+          }
+        }
+      },
+      "SearchResultResponse": {
+        "type": "object",
+        "description": "One retailer offer found by a search.",
+        "required": [
+          "retailer",
+          "retailer_sku",
+          "title",
+          "url",
+          "price_centavos",
+          "availability",
+          "membership_required"
+        ],
+        "properties": {
+          "amazon": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SearchMatchResponse",
+                "description": "Amazon match and ROI, when one was found."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "availability": {
+            "type": "string",
+            "description": "`in_stock`, `out_of_stock` or `unknown` when the offer was seen."
+          },
+          "membership_required": {
+            "type": "boolean",
+            "description": "Buying needs a store membership (Costco, Sam's Club) the user holds."
+          },
+          "price_centavos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Retailer price, in centavos."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id."
+          },
+          "retailer_sku": {
+            "type": "string",
+            "description": "The retailer's product id."
+          },
+          "title": {
+            "type": "string",
+            "description": "Listing title."
+          },
+          "url": {
+            "type": "string",
+            "description": "Listing URL."
+          }
+        }
+      },
+      "SearchRetailerResponse": {
+        "type": "object",
+        "description": "What one retailer contributed to a search.",
+        "required": [
+          "retailer",
+          "outcome",
+          "offers"
+        ],
+        "properties": {
+          "offers": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Offers it returned.",
+            "minimum": 0
+          },
+          "outcome": {
+            "type": "string",
+            "description": "`ok`, `category_only` (no keyword search; covered by scheduled\ncategory browsing), `blocked_needs_kyc`, `skipped_robots`, `failed`\nor `no_offers`."
+          },
+          "retailer": {
+            "type": "string",
+            "description": "Retailer id, e.g. `walmart_mx`."
+          }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "description": "A new session: the account and its fresh CSRF token.",
+        "required": [
+          "user",
+          "csrf_token"
+        ],
+        "properties": {
+          "csrf_token": {
+            "type": "string",
+            "description": "Send as `X-CSRF-Token` on every non-GET request."
+          },
+          "user": {
+            "$ref": "#/components/schemas/MeResponse",
+            "description": "The signed-in account."
+          }
+        }
+      },
+      "SignInRequest": {
+        "type": "object",
+        "description": "Body of `POST /auth/signin`.",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "E-mail address."
+          },
+          "password": {
+            "type": "string",
+            "description": "Password."
+          }
+        }
+      },
+      "SignUpRequest": {
+        "type": "object",
+        "description": "Body of `POST /auth/signup`.",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "E-mail address."
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`es` (default) or `en`."
+          },
+          "password": {
+            "type": "string",
+            "description": "8–128 characters."
+          }
+        }
+      },
+      "StartSearchRequest": {
+        "type": "object",
+        "description": "Body of `POST /searches`.",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Keywords, 1–100 characters after trimming and collapsing spaces."
+          }
+        }
       }
     },
     "securitySchemes": {
       "admin_bearer": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "csrf_token": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token"
+      },
+      "session_cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "mex_session"
       }
     }
   }

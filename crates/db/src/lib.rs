@@ -6,6 +6,12 @@
 pub mod access;
 pub mod brightdata_runs;
 pub mod price_history;
+pub mod queue;
+pub mod searches;
+pub mod sessions;
+pub mod tracking;
+pub mod usage;
+pub mod users;
 
 use std::ffi::OsString;
 use std::str::FromStr as _;
@@ -16,6 +22,9 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 /// The connection pool type returned by [`connect`].
 pub use sqlx::postgres::PgPool;
+
+/// The error type returned by this crate's queries; redact before logging.
+pub use sqlx::Error as DbError;
 
 /// Embedded migrations from `crates/db/migrations`.
 pub static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
@@ -84,6 +93,17 @@ impl DatabaseUrl {
     /// As [`DatabaseUrl::from_lookup`].
     pub fn from_env() -> Result<Option<Self>, SecretError> {
         Self::from_lookup(|key| std::env::var_os(key))
+    }
+
+    /// The TCP host the pool connects to, or `None` when it connects through
+    /// a Unix socket. Hostnames may be infrastructure details: don't log it.
+    #[must_use]
+    pub fn host(&self) -> Option<&str> {
+        if self.options.get_socket().is_some() {
+            None
+        } else {
+            Some(self.options.get_host())
+        }
     }
 
     /// Removes the URL and password from error text; apply it before

@@ -1,20 +1,72 @@
 //! Builds the Amazon.com.mx source: SP-API first, Bright Data's Amazon
-//! dataset as the fallback (ADR 0010). Logs which sources are configured
-//! (names only, never values).
+//! dataset as the fallback (ADR 0010), built per paying tenant so the
+//! fallback's dataset runs count against that tenant's Bright Data caps
+//! (ADR 0011). Logs which sources are configured (names only, never values).
 
 use std::sync::Arc;
 
 use amazon::{BrightDataAmazonSource, SpApiAmazonSource, SpApiClient, SpApiConfig};
 use app::{AmazonSource, FallbackAmazonSource};
 use brightdata::Transport;
-use brightdata::runs::{RunStore, SystemClock};
+use brightdata::runs::{Caps, RunStore, SystemClock};
+use domain::TenantId;
 use http_guard::{Redactor, Secret};
+
+/// The Amazon source as paid for by a tenant.
+pub trait TenantAmazon: Send + Sync {
+    /// The (ungated) source whose paid calls are charged to `tenant`.
+    fn for_tenant(&self, tenant: &TenantId) -> Arc<dyn AmazonSource>;
+}
+
+/// One source for every tenant: for sources with no per-tenant spend
+/// (tests, fakes).
+pub struct SharedAmazon(pub Arc<dyn AmazonSource>);
+
+impl TenantAmazon for SharedAmazon {
+    fn for_tenant(&self, _tenant: &TenantId) -> Arc<dyn AmazonSource> {
+        Arc::clone(&self.0)
+    }
+}
+
+/// SP-API (shared) with a Bright Data fallback built per tenant: its
+/// dataset runs use scope `<tenant>` / `amazon_mx_fallback`.
+pub struct TenantAmazonSources<T, S> {
+    primary: Option<Arc<dyn AmazonSource>>,
+    fallback: Option<(Arc<T>, Arc<S>)>,
+    caps: Caps,
+}
+
+impl<T, S> TenantAmazon for TenantAmazonSources<T, S>
+where
+    T: Transport + 'static,
+    S: RunStore + 'static,
+{
+    fn for_tenant(&self, tenant: &TenantId) -> Arc<dyn AmazonSource> {
+        let fallback = self.fallback.as_ref().and_then(|(transport, store)| {
+            match BrightDataAmazonSource::for_tenant(
+                Arc::clone(transport),
+                Arc::clone(store),
+                SystemClock,
+                tenant.as_str(),
+            ) {
+                Ok(source) => Some(Arc::new(source.with_caps(self.caps)) as Arc<dyn AmazonSource>),
+                Err(error) => {
+                    tracing::warn!(error = %error, "Bright Data Amazon fallback could not be built");
+                    None
+                }
+            }
+        });
+        Arc::new(FallbackAmazonSource::new(self.primary.clone(), fallback))
+    }
+}
 
 /// Which Amazon sources were built.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct AmazonSources {
-    pub(crate) sp_api: bool,
-    pub(crate) bright_data: bool,
+pub struct AmazonSources {
+    /// SP-API is configured.
+    pub sp_api: bool,
+    /// The Bright Data fallback is configured.
+    pub bright_data: bool,
 }
 
 /// The SP-API source, or `None` (logged) when a credential is missing or the
@@ -52,7 +104,7 @@ fn spapi_source(
 /// lock: fallback lookups start dataset runs, and a worker without the lock
 /// could have them failed by the lock holder's start-up recovery. Without
 /// the lock it logs (no secrets) and returns `None`; SP-API is unaffected.
-pub(crate) fn driver_fallback<T, S>(
+pub fn driver_fallback<T, S>(
     holds_driver_lock: bool,
     client: Option<Arc<T>>,
     store: Arc<S>,
@@ -64,50 +116,52 @@ pub(crate) fn driver_fallback<T, S>(
     client.map(|client| (client, store))
 }
 
-/// `SP-API?` with `fallback?` (a Bright Data transport and run store),
-/// combined by [`FallbackAmazonSource`]. Builds clients only; no request is
-/// made here.
-pub(crate) fn amazon_source<T, S>(
+/// `SP-API?` with `fallback?` (a Bright Data transport and run store);
+/// [`TenantAmazon::for_tenant`] combines them with [`FallbackAmazonSource`].
+/// The fallback's dataset runs use `caps` (the operator's configured caps)
+/// under the paying tenant's scope. Builds clients only; no request is made
+/// here.
+pub fn amazon_source<T, S>(
     spapi: (Option<Secret>, Option<Secret>, Option<Secret>),
     fallback: Option<(Arc<T>, Arc<S>)>,
+    caps: Caps,
     redactor: &Redactor,
-) -> (FallbackAmazonSource, AmazonSources)
+) -> (TenantAmazonSources<T, S>, AmazonSources)
 where
     T: Transport + 'static,
     S: RunStore + 'static,
 {
     let primary = spapi_source(spapi, redactor);
-    let secondary: Option<Arc<dyn AmazonSource>> = fallback.and_then(|(transport, store)| {
-        match BrightDataAmazonSource::new(transport, store, SystemClock) {
-            Ok(source) => Some(Arc::new(source) as Arc<dyn AmazonSource>),
-            Err(error) => {
-                tracing::warn!(error = %error, "Bright Data Amazon fallback could not be built");
-                None
-            }
-        }
-    });
     let sources = AmazonSources {
         sp_api: primary.is_some(),
-        bright_data: secondary.is_some(),
+        bright_data: fallback.is_some(),
     };
     tracing::info!(
         sp_api = sources.sp_api,
         bright_data = sources.bright_data,
         "Amazon sources configured"
     );
-    (FallbackAmazonSource::new(primary, secondary), sources)
+    (
+        TenantAmazonSources {
+            primary,
+            fallback,
+            caps,
+        },
+        sources,
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use app::{AmazonSource, AmazonSourceError};
+    use app::AmazonSourceError;
     use brightdata::BrightDataClient;
-    use domain::Gtin;
+    use brightdata::runs::Caps;
+    use domain::{Gtin, TenantId};
     use http_guard::{Redactor, Secret};
 
     use std::sync::Arc;
 
-    use super::{AmazonSources, amazon_source, driver_fallback};
+    use super::{AmazonSources, TenantAmazon, amazon_source, driver_fallback};
     use crate::brightdata_store::PgRunStore;
 
     fn secret(value: &str) -> Option<Secret> {
@@ -119,6 +173,7 @@ mod tests {
         let (source, sources) = amazon_source::<BrightDataClient, PgRunStore>(
             (None, None, None),
             None,
+            Caps::default(),
             &Redactor::default(),
         );
         assert_eq!(
@@ -130,7 +185,11 @@ mod tests {
         );
         let gtin = Gtin::new("7501055363063").unwrap();
         assert_eq!(
-            source.catalog_by_gtin(&gtin).await.unwrap_err(),
+            source
+                .for_tenant(&TenantId::default_tenant())
+                .catalog_by_gtin(&gtin)
+                .await
+                .unwrap_err(),
             AmazonSourceError::NotConfigured
         );
     }
@@ -140,6 +199,7 @@ mod tests {
         let (_, sources) = amazon_source::<BrightDataClient, PgRunStore>(
             (secret("id"), None, secret("refresh")),
             None,
+            Caps::default(),
             &Redactor::default(),
         );
         assert!(!sources.sp_api);
@@ -150,6 +210,7 @@ mod tests {
         let (_, sources) = amazon_source::<BrightDataClient, PgRunStore>(
             (secret("id"), secret("secret"), secret("refresh")),
             None,
+            Caps::default(),
             &Redactor::default(),
         );
         assert!(sources.sp_api);

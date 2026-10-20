@@ -4,24 +4,55 @@
 //! client is generated from it (`npm --prefix web run gen:api`).
 
 mod admin;
+pub mod auth;
 mod products;
+mod ratelimit;
+mod roi;
+mod searches;
 
 pub use admin::{AdminState, MIN_TOKEN_LEN, RetailerAccessCounts};
+pub use auth::{
+    AccountsState, CSRF_HEADER, CsrfResponse, ErrorResponse, LocaleRequest, MeResponse,
+    OnboardingRequest, PgSessionStore, SESSION_COOKIE, SessionConfig, SessionResponse,
+    SessionStoreHandle, SignInRequest, SignUpRequest,
+};
 pub use products::{
-    ListingPriceStatsResponse, PriceStatsResponse, PriceWindowResponse, ProductsState,
+    DailyPriceResponse, ListingPriceSeriesResponse, ListingPriceStatsResponse,
+    PriceHistoryResponse, PriceStatsResponse, PriceWindowResponse, ProductsState,
+};
+pub use ratelimit::{Quota, RateLimits};
+pub use roi::{RoiItemRequest, RoiItemResponse, RoiRequest, RoiResponse};
+pub use searches::{
+    SearchCreatedResponse, SearchMatchResponse, SearchResponse, SearchResultResponse,
+    SearchRetailerResponse, SearchesState, StartSearchRequest,
 };
 
+use std::sync::Arc;
+
+use axum::extract::Request;
+use axum::http::StatusCode;
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse as _, Response};
 use axum::{Json, Router, routing::get};
+use axum_login::AuthManagerLayerBuilder;
 use serde::Serialize;
-use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+use tower_sessions::cookie::SameSite;
+use tower_sessions::{Expiry, SessionManagerLayer};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 /// Path where the OpenAPI spec is served.
 pub const OPENAPI_PATH: &str = "/api-docs/openapi.json";
 
-/// Name of the security scheme for `Authorization: Bearer <ADMIN_API_TOKEN>`.
+/// Name of the security scheme for the admin bearer token (`ADMIN_API_TOKEN`).
 pub const ADMIN_BEARER: &str = "admin_bearer";
+
+/// Name of the security scheme for the session cookie.
+pub const SESSION_SCHEME: &str = "session_cookie";
+
+/// Name of the security scheme for the `X-CSRF-Token` header.
+pub const CSRF_SCHEME: &str = "csrf_token";
 
 #[derive(OpenApi)]
 #[openapi(
@@ -34,18 +65,53 @@ pub const ADMIN_BEARER: &str = "admin_bearer";
 )]
 struct ApiDoc;
 
-/// Registers the admin bearer-token security scheme in the spec.
+/// Registers the admin bearer, session cookie and CSRF header schemes.
 struct SecurityAddon;
 
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        openapi
-            .components
-            .get_or_insert_with(Default::default)
-            .add_security_scheme(
-                ADMIN_BEARER,
-                SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()),
-            );
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            ADMIN_BEARER,
+            SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()),
+        );
+        components.add_security_scheme(
+            SESSION_SCHEME,
+            SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new(SESSION_COOKIE))),
+        );
+        components.add_security_scheme(
+            CSRF_SCHEME,
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("X-CSRF-Token"))),
+        );
+    }
+}
+
+/// Everything the router needs; each part fails closed when disabled.
+#[derive(Clone)]
+pub struct ApiConfig {
+    /// Admin routes (bearer token).
+    pub admin: AdminState,
+    /// Product routes (signed-in users).
+    pub products: ProductsState,
+    /// Search routes (signed-in users).
+    pub searches: SearchesState,
+    /// Accounts and sessions; without them every user route answers 503.
+    pub accounts: AccountsState,
+    /// Per-plan and per-IP quotas on the user routes.
+    pub rate_limits: RateLimits,
+}
+
+impl ApiConfig {
+    /// Every route except `/health` and the spec answers 503.
+    #[must_use]
+    pub const fn disabled() -> Self {
+        Self {
+            admin: AdminState::disabled(),
+            products: ProductsState::disabled(),
+            searches: SearchesState::disabled(),
+            accounts: AccountsState::disabled(),
+            rate_limits: RateLimits::defaults(),
+        }
     }
 }
 
@@ -69,32 +135,89 @@ async fn health() -> Json<HealthResponse> {
     })
 }
 
-/// Builds the application router and its OpenAPI spec, with the admin and
-/// product routes disabled (they answer 503).
+/// Builds the application router and its OpenAPI spec with every
+/// database-backed route disabled (they answer 503).
 ///
 /// The returned router also serves the spec at [`OPENAPI_PATH`].
 pub fn router() -> (Router, utoipa::openapi::OpenApi) {
-    router_with(AdminState::disabled())
+    build(ApiConfig::disabled())
 }
 
 /// Like [`router`], with the admin routes configured by `admin`.
 pub fn router_with(admin: AdminState) -> (Router, utoipa::openapi::OpenApi) {
-    router_with_state(admin, ProductsState::disabled())
+    build(ApiConfig {
+        admin,
+        ..ApiConfig::disabled()
+    })
 }
 
-/// Like [`router`], with the admin and product routes configured.
-pub fn router_with_state(
-    admin: AdminState,
-    products: ProductsState,
-) -> (Router, utoipa::openapi::OpenApi) {
-    let product_routes = OpenApiRouter::new()
-        .routes(routes!(products::product_price_stats))
-        .with_state(products);
+/// User routes without accounts: 503, before any extractor runs.
+async fn unavailable(_request: Request, _next: Next) -> Response {
+    auth::ApiError(StatusCode::SERVICE_UNAVAILABLE, "unavailable").into_response()
+}
+
+/// Routes for signed-in users (and sign-up/sign-in), behind the session,
+/// auth, rate-limit and CSRF layers (in that order).
+fn user_routes(config: &ApiConfig) -> OpenApiRouter {
+    let routes = OpenApiRouter::new()
+        .routes(routes!(auth::sign_up))
+        .routes(routes!(auth::sign_in))
+        .routes(routes!(auth::sign_out))
+        .routes(routes!(auth::csrf_token))
+        .routes(routes!(auth::me))
+        .routes(routes!(auth::update_onboarding))
+        .routes(routes!(auth::update_locale))
+        .with_state(config.accounts.clone())
+        .merge(
+            OpenApiRouter::new()
+                .routes(routes!(searches::start_search))
+                .routes(routes!(searches::get_search))
+                .with_state(config.searches.clone()),
+        )
+        .merge(
+            OpenApiRouter::new()
+                .routes(routes!(products::product_price_stats))
+                .routes(routes!(products::product_price_history))
+                .with_state(config.products.clone()),
+        )
+        .merge(OpenApiRouter::new().routes(routes!(roi::calculate_roi)));
+    let Some(accounts) = config.accounts.inner.as_deref() else {
+        return routes.layer(middleware::from_fn(unavailable));
+    };
+    let sessions = SessionManagerLayer::new(accounts.store.clone())
+        .with_name(SESSION_COOKIE)
+        .with_path("/")
+        .with_http_only(true)
+        .with_same_site(SameSite::Lax)
+        .with_secure(accounts.config.secure_cookie)
+        .with_expiry(Expiry::OnInactivity(time::Duration::days(
+            auth::SESSION_DAYS,
+        )))
+        // Slide the expiry on every request: without this, read-only
+        // requests never touch the record and sessions end SESSION_DAYS
+        // after sign-in however active the user is.
+        .with_always_save(true);
+    let auth_layer = AuthManagerLayerBuilder::new(accounts.backend.clone(), sessions).build();
+    routes
+        .layer(middleware::from_fn_with_state(
+            Arc::new(accounts.config.clone()),
+            auth::csrf_guard,
+        ))
+        .layer(middleware::from_fn_with_state(
+            ratelimit::Limiters::new(&config.rate_limits),
+            ratelimit::rate_limit,
+        ))
+        .layer(auth_layer)
+}
+
+/// Builds the router and spec from `config`. The router also serves the
+/// spec at [`OPENAPI_PATH`].
+pub fn build(config: ApiConfig) -> (Router, utoipa::openapi::OpenApi) {
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(health))
         .routes(routes!(admin::brightdata_access))
-        .with_state(admin)
-        .merge(product_routes)
+        .with_state(config.admin.clone())
+        .merge(user_routes(&config))
         .split_for_parts();
     let spec = api.clone();
     let router = router.route(

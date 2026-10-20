@@ -6,14 +6,8 @@ import { api } from "@/lib/api/client";
 
 type Status = "checking" | "online" | "offline";
 
-const LABELS: Record<Status, string> = {
-  checking: "Comprobando API…",
-  online: "API en línea",
-  offline: "API no disponible",
-};
-
 /** Shows whether the Rust API answers GET /health. */
-export function HealthStatus() {
+export function HealthStatus({ labels }: { labels: Record<Status, string> }) {
   const [status, setStatus] = useState<Status>("checking");
 
   useEffect(() => {
@@ -33,7 +27,7 @@ export function HealthStatus() {
 
   return (
     <p role="status" aria-live="polite" data-status={status}>
-      {LABELS[status]}
+      {labels[status]}
     </p>
   );
 }

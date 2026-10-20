@@ -16,7 +16,7 @@ Amazon.com.mx catalog, offer and fee data ([ADR 0003](../decisions/0003-amazon-s
   - `search_catalog_by_identifiers(&[Gtin])` (1 to `MAX_IDENTIFIERS` = 20, all of one `IdentifierType`) and `search_catalog_by_keyword(&str)` (1 to `MAX_KEYWORD_CHARS` = 200 printable characters).
   - Errors are `SpApiError { NotAuthorized, RateLimited, Transient, Invalid, Parse, Build }`; `to_source_error()` maps them to the port error.
 - `SpApiAmazonSource::new(client, clock)`: the client as an `AmazonSource`. Offers and fees are public only through it: `AmazonSource::offers` and `AmazonSource::fees` (`Fulfillment::Fba` sets `IsAmazonFulfilled`).
-- `BrightDataAmazonSource::new(transport, run_store, clock)`; `with_timing(Timing)` changes poll timing.
+- `BrightDataAmazonSource::new(transport, run_store, clock)` (scope `system`) or `BrightDataAmazonSource::for_tenant(transport, run_store, clock, tenant)` (runs charged to `tenant`); `with_timing(Timing)` changes poll timing.
 - `RateLimiter`, `per_request_from_header`, `Operation`, `RateLimit`, `RateTable`.
 - Constants: `MX_MARKETPLACE_ID`, `SPAPI_NA_HOST`, `SPAPI_NA_SANDBOX_HOST`, `LWA_HOST`, `LWA_TOKEN_URL`, `MXN`, `AMAZON_GLOBAL_DATASET_ID`, `AMAZON_MX_ORIGIN`, `LIMIT_PER_INPUT`, `FALLBACK_TENANT`, `FALLBACK_JOB`.
 
@@ -117,7 +117,7 @@ One token refresh and one catalog search against `sandbox.sellingpartnerapi-na.a
 
 ## Bright Data fallback
 
-Dataset `gd_lwhideng15g8jg63s7` ("Amazon products global dataset") via `brightdata::runs::Runner`, so the kill switch, daily caps and durable runs apply. Run scope: tenant `system`, job `amazon_mx_fallback`; one call at a time (a scope allows one active run). The worker builds the fallback only while it holds the Bright Data driver lock; other workers use SP-API only ([worker.md](worker.md)). A run still active when the poll budget ends is cancelled and returns `Unavailable`. A run interrupted by a worker stop is failed (not resumed) at the next start-up, so it never holds the scope's active slot ([worker.md](worker.md)).
+Dataset `gd_lwhideng15g8jg63s7` ("Amazon products global dataset") via `brightdata::runs::Runner`, so the kill switch, daily caps and durable runs apply. Caps default to `Caps::default()`; `with_caps` sets others (the worker passes its configured `BRIGHTDATA_MAX_*` caps). Run scope: job `amazon_mx_fallback` under the paying tenant (`for_tenant(…, tenant)`; `new` uses `FALLBACK_TENANT` = `system`), so the tenant's daily caps apply; one call at a time per source (a scope allows one active run). The worker builds one source per job for the job's tenant. The worker builds the fallback only while it holds the Bright Data driver lock; other workers use SP-API only ([worker.md](worker.md)). A run still active when the poll budget ends is cancelled and returns `Unavailable`. A run interrupted by a worker stop is failed (not resumed) at the next start-up, so it never holds the scope's active slot ([worker.md](worker.md)).
 
 | Port call | Dataset request |
 |---|---|

@@ -1,21 +1,22 @@
-//! Tests for `GET /products/{asin}/price-stats`: shape and values on fixed
-//! fixture data with an injected clock, plus 400/503/500.
+//! Tests for `GET /products/{asin}/price-stats` and
+//! `GET /products/{asin}/price-history`: shape and values on fixed fixture
+//! data with an injected clock, plus 401/400/422/503/500.
+
+mod common;
 
 use std::sync::Arc;
 
-use api::{AdminState, ProductsState};
+use api::{ProductsState, SearchesState};
 use app::{
-    Clock, MatchRepo, PortFuture, PriceHistoryRepo, PricePoint, PriceStats, RepoError,
+    Clock, MatchRepo, PortFuture, PriceHistoryRepo, PricePoint, PriceSeries, PriceStats, RepoError,
     UpsertOutcome,
 };
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
+use axum::http::{Method, StatusCode};
+use common::{TestApp, generous_limits};
 use domain::{
     Asin, Availability, DAY_MS, Offer, PriceMxn, ProductMatch, RetailerId, RetailerSku, UnixMillis,
 };
-use http_body_util::BodyExt as _;
 use serde_json::{Value, json};
-use tower::ServiceExt as _;
 
 const NOW: i64 = 1_760_000_000_000;
 const ASIN: &str = "B0CHHSFMRL";
@@ -53,7 +54,8 @@ impl PriceHistoryRepo for FakePrices {
     }
 }
 
-struct FakeMatches;
+/// The accepted listings of every ASIN.
+struct FakeMatches(Vec<(RetailerId, RetailerSku)>);
 
 impl MatchRepo for FakeMatches {
     fn upsert<'a>(
@@ -67,12 +69,7 @@ impl MatchRepo for FakeMatches {
         &'a self,
         _: &'a Asin,
     ) -> PortFuture<'a, Result<Vec<(RetailerId, RetailerSku)>, RepoError>> {
-        Box::pin(async {
-            Ok(vec![(
-                RetailerId::new("walmart_mx").unwrap(),
-                RetailerSku::new("00750105530007").unwrap(),
-            )])
-        })
+        Box::pin(async move { Ok(self.0.clone()) })
     }
 }
 
@@ -95,36 +92,57 @@ fn fixture() -> Vec<PricePoint> {
     ]
 }
 
-fn enabled(prices: Result<Vec<PricePoint>, RepoError>) -> ProductsState {
-    ProductsState::new(Arc::new(PriceStats::new(
-        Arc::new(FakePrices(prices)),
-        Arc::new(FakeMatches),
-        Arc::new(FixedClock),
-    )))
+fn listing(retailer: &str, sku: &str) -> (RetailerId, RetailerSku) {
+    (
+        RetailerId::new(retailer).unwrap(),
+        RetailerSku::new(sku).unwrap(),
+    )
 }
 
-async fn call(state: ProductsState, asin: &str) -> (StatusCode, Vec<u8>) {
-    let (router, _) = api::router_with_state(AdminState::disabled(), state);
-    let response = router
-        .oneshot(
-            Request::get(format!("/products/{asin}/price-stats"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let status = response.status();
-    let body = response.into_body().collect().await.unwrap().to_bytes();
-    (status, body.to_vec())
+fn enabled(prices: Result<Vec<PricePoint>, RepoError>) -> ProductsState {
+    enabled_with(prices, vec![listing("walmart_mx", "00750105530007")])
+}
+
+fn enabled_with(
+    prices: Result<Vec<PricePoint>, RepoError>,
+    listings: Vec<(RetailerId, RetailerSku)>,
+) -> ProductsState {
+    let prices = Arc::new(FakePrices(prices));
+    let matches = Arc::new(FakeMatches(listings));
+    ProductsState::new(
+        Arc::new(PriceStats::new(
+            prices.clone(),
+            matches.clone(),
+            Arc::new(FixedClock),
+        )),
+        Arc::new(PriceSeries::new(prices, matches, Arc::new(FixedClock))),
+    )
+}
+
+/// `GET path` as a signed-in user.
+async fn get(state: ProductsState, path: &str) -> common::Reply {
+    let app = TestApp::new(state, SearchesState::disabled(), generous_limits());
+    let mut client = app.client();
+    client.signed_up("ana@example.com").await;
+    client.get(path).await
+}
+
+async fn call(state: ProductsState, asin: &str) -> (StatusCode, Value) {
+    let reply = get(state, &format!("/products/{asin}/price-stats")).await;
+    (reply.status, reply.body)
+}
+
+/// Start of the UTC day `days_ago` days before `NOW`.
+const fn day(days_ago: i64) -> i64 {
+    (NOW - days_ago * DAY_MS).div_euclid(DAY_MS) * DAY_MS
 }
 
 #[tokio::test]
 async fn returns_windows_from_fixture_and_clock() {
     let (status, body) = call(enabled(Ok(fixture())), ASIN).await;
     assert_eq!(status, StatusCode::OK);
-    let got: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(
-        got,
+        body,
         json!({
             "asin": ASIN,
             "as_of_ms": NOW,
@@ -139,7 +157,8 @@ async fn returns_windows_from_fixture_and_clock() {
                     {"days": 365, "low_centavos": 90000, "high_centavos": 110000,
                      "average_centavos": 101250, "observations": 4}
                 ]
-            }]
+            }],
+            "hidden_listings": 0
         })
     );
 }
@@ -148,13 +167,64 @@ async fn returns_windows_from_fixture_and_clock() {
 async fn empty_windows_have_null_prices() {
     let (status, body) = call(enabled(Ok(vec![])), &ASIN.to_lowercase()).await;
     assert_eq!(status, StatusCode::OK);
-    let got: Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(got["asin"], ASIN);
+    assert_eq!(body["asin"], ASIN);
     assert_eq!(
-        got["listings"][0]["windows"][0],
+        body["listings"][0]["windows"][0],
         json!({"days": 30, "low_centavos": null, "high_centavos": null,
                "average_centavos": null, "observations": 0})
     );
+}
+
+fn retailers(body: &Value) -> Vec<&str> {
+    body["listings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["retailer"].as_str().unwrap())
+        .collect()
+}
+
+#[tokio::test]
+async fn membership_listings_are_hidden_unless_the_user_has_it() {
+    let state = enabled_with(
+        Ok(fixture()),
+        vec![
+            listing("sams_mx", "S1"),
+            listing("costco_mx", "C1"),
+            listing("walmart_mx", "W1"),
+        ],
+    );
+    let app = TestApp::new(state, SearchesState::disabled(), generous_limits());
+    let mut client = app.client();
+    client.signed_up("ana@example.com").await;
+    let paths = [
+        format!("/products/{ASIN}/price-stats"),
+        format!("/products/{ASIN}/price-history"),
+    ];
+    for path in &paths {
+        let reply = client.get(path).await;
+        assert_eq!(reply.status, StatusCode::OK, "{path}");
+        assert_eq!(retailers(&reply.body), ["walmart_mx"], "{path}");
+        assert_eq!(reply.body["hidden_listings"], 2, "{path}");
+    }
+
+    let reply = client
+        .send(
+            Method::PUT,
+            "/me/onboarding",
+            Some(json!({"has_costco": true, "has_sams": false})),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    for path in &paths {
+        let reply = client.get(path).await;
+        assert_eq!(
+            retailers(&reply.body),
+            ["costco_mx", "walmart_mx"],
+            "{path}"
+        );
+        assert_eq!(reply.body["hidden_listings"], 1, "{path}");
+    }
 }
 
 #[tokio::test]
@@ -173,5 +243,115 @@ async fn without_database_is_503() {
 async fn storage_failure_is_500_without_detail() {
     let (status, body) = call(enabled(Err(RepoError::Unavailable)), ASIN).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(body.is_empty());
+    assert_eq!(body, json!({"error": "internal"}));
+}
+
+#[tokio::test]
+async fn product_routes_need_a_session() {
+    let app = TestApp::new(
+        enabled(Ok(fixture())),
+        SearchesState::disabled(),
+        generous_limits(),
+    );
+    let mut client = app.client();
+    for path in ["price-stats", "price-history"] {
+        let reply = client.get(&format!("/products/{ASIN}/{path}")).await;
+        assert_eq!(
+            (reply.status, reply.error()),
+            (StatusCode::UNAUTHORIZED, "unauthenticated"),
+            "{path}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn history_returns_one_point_per_day_oldest_first() {
+    let reply = get(
+        enabled(Ok(fixture())),
+        &format!("/products/{ASIN}/price-history?days=30"),
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(
+        reply.body,
+        json!({
+            "asin": ASIN,
+            "since_ms": NOW - 30 * DAY_MS,
+            "as_of_ms": NOW,
+            "listings": [{
+                "retailer": "walmart_mx",
+                "retailer_sku": "00750105530007",
+                "points": [
+                    {"day_ms": day(20), "low_centavos": 10000, "high_centavos": 10000, "in_stock": false},
+                    {"day_ms": day(10), "low_centavos": 110000, "high_centavos": 110000, "in_stock": true},
+                    {"day_ms": day(1), "low_centavos": 105000, "high_centavos": 105000, "in_stock": true}
+                ]
+            }],
+            "hidden_listings": 0
+        })
+    );
+}
+
+#[tokio::test]
+async fn history_defaults_to_365_days() {
+    let reply = get(
+        enabled(Ok(fixture())),
+        &format!("/products/{ASIN}/price-history"),
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(reply.body["since_ms"], NOW - 365 * DAY_MS);
+    let points = reply.body["listings"][0]["points"].as_array().unwrap();
+    assert_eq!(points.len(), 5);
+    assert_eq!(points[0]["day_ms"], day(200));
+}
+
+#[tokio::test]
+async fn history_rejects_bad_days_asin_and_storage_errors() {
+    for (query, status, code) in [
+        ("days=0", StatusCode::UNPROCESSABLE_ENTITY, "invalid_days"),
+        ("days=366", StatusCode::UNPROCESSABLE_ENTITY, "invalid_days"),
+        ("days=abc", StatusCode::BAD_REQUEST, "invalid_query"),
+        ("days=-1", StatusCode::BAD_REQUEST, "invalid_query"),
+    ] {
+        let reply = get(
+            enabled(Ok(fixture())),
+            &format!("/products/{ASIN}/price-history?{query}"),
+        )
+        .await;
+        assert_eq!((reply.status, reply.error()), (status, code), "{query}");
+    }
+    let reply = get(enabled(Ok(fixture())), "/products/nope/price-history").await;
+    assert_eq!(reply.status, StatusCode::BAD_REQUEST);
+    let reply = get(
+        enabled(Err(RepoError::Unavailable)),
+        &format!("/products/{ASIN}/price-history"),
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(reply.body, json!({"error": "internal"}));
+    let reply = get(
+        ProductsState::disabled(),
+        &format!("/products/{ASIN}/price-history"),
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn spec_documents_the_history_route() {
+    let spec = serde_json::to_value(api::openapi()).unwrap();
+    let route = &spec["paths"]["/products/{asin}/price-history"]["get"];
+    assert_eq!(route["security"], json!([{ api::SESSION_SCHEME: [] }]));
+    let params: Vec<&str> = route["parameters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(params, ["asin", "days"]);
+    let days = &route["parameters"][1];
+    assert_eq!(days["in"], "query");
+    assert_eq!(days["required"], false);
+    assert!(spec["components"]["schemas"]["PriceHistoryResponse"].is_object());
 }

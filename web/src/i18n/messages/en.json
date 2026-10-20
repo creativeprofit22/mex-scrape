@@ -1,0 +1,183 @@
+{
+  "meta": {
+    "title": "mex-scrape",
+    "description": "Compare Mexican store prices with Amazon.com.mx and work out your ROI."
+  },
+  "nav": {
+    "label": "Main navigation",
+    "home": "Home",
+    "search": "Search",
+    "calculator": "Calculator",
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "signOut": "Sign out",
+    "skipToContent": "Skip to content",
+    "switchLanguage": "Español",
+    "switchLanguageLabel": "Switch the language to Spanish"
+  },
+  "common": {
+    "loading": "Loading…",
+    "none": "—",
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "rateLimited": "Too many requests. Wait a moment and try again.",
+      "unavailable": "The service is not available right now.",
+      "csrf": "Your session changed. Reload the page and try again."
+    }
+  },
+  "health": {
+    "checking": "Checking API…",
+    "online": "API online",
+    "offline": "API unavailable"
+  },
+  "home": {
+    "heading": "mex-scrape",
+    "intro": "Compare Mexican store prices with Amazon.com.mx, work out your ROI and check price history.",
+    "start": "Start searching",
+    "createAccount": "Create an account"
+  },
+  "auth": {
+    "signUpHeading": "Sign up",
+    "signInHeading": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "Between 8 and 128 characters.",
+    "signUpSubmit": "Create account",
+    "signInSubmit": "Sign in",
+    "submitting": "Sending…",
+    "haveAccount": "Already have an account? Sign in",
+    "noAccount": "No account yet? Create one",
+    "errors": {
+      "invalidEmail": "Enter a valid email address.",
+      "weakPassword": "The password must be between 8 and 128 characters.",
+      "emailTaken": "An account with that email already exists.",
+      "invalidCredentials": "Wrong email or password."
+    }
+  },
+  "onboarding": {
+    "heading": "Your memberships",
+    "intro": "Some stores only sell to members. Tick the memberships you hold and we will hide offers you cannot buy.",
+    "legend": "Memberships",
+    "costco": "Costco",
+    "sams": "Sam's Club",
+    "submit": "Save and continue",
+    "saving": "Saving…"
+  },
+  "search": {
+    "heading": "Search products",
+    "label": "Product to search for",
+    "placeholder": "E.g. cordless drill",
+    "submit": "Search",
+    "costsLegend": "Your per-unit costs",
+    "prep": "Prep (MXN)",
+    "shipping": "Shipping to Amazon (MXN)",
+    "status": {
+      "queued": "Queued…",
+      "running": "Searching the stores…",
+      "done": "Search finished.",
+      "partial": "Search finished with partial results.",
+      "failed": "The search failed.",
+      "refused": "The search was refused.",
+      "timeout": "The search is taking too long. Try again later."
+    },
+    "resultsHeading": "Results for “{query}”",
+    "noResults": "No offers found.",
+    "hidden": "{count} results hidden because they need a membership you do not hold.",
+    "columns": {
+      "product": "Product",
+      "price": "Price",
+      "availability": "Availability",
+      "amazon": "Amazon",
+      "profit": "Estimated profit",
+      "roi": "ROI"
+    },
+    "roiFailed": "Profit and ROI could not be calculated. {reason}",
+    "roiError": {
+      "zero_units": "No units to spread costs over",
+      "overflow": "Amounts too large"
+    },
+    "availability": {
+      "in_stock": "In stock",
+      "out_of_stock": "Out of stock",
+      "unknown": "Unknown"
+    },
+    "match": {
+      "accepted": "Match",
+      "needsReview": "Needs review",
+      "none": "No match",
+      "history": "{asin} price history"
+    },
+    "membership": "Membership required",
+    "storeLink": "View in store (opens in a new tab)",
+    "outcomesHeading": "Stores checked",
+    "offers": "{count} offers",
+    "outcomeLine": "{retailer}: {outcome} · {offers}",
+    "outcomes": {
+      "ok": "Checked",
+      "category_only": "Category browsing only",
+      "blocked_needs_kyc": "Blocked (needs verification)",
+      "skipped_robots": "Skipped (robots.txt)",
+      "failed": "Failed",
+      "no_offers": "No offers"
+    }
+  },
+  "product": {
+    "heading": "{asin} price history",
+    "chartHeading": "Lowest price per day",
+    "chartLabel": "Chart of each store's lowest daily price from {from} to {to}, ranging {min} to {max}.",
+    "tableToggle": "Show the data as a table",
+    "tableCaption": "Daily prices at {retailer} ({sku})",
+    "day": "Day",
+    "low": "Low",
+    "high": "High",
+    "average": "Average",
+    "inStock": "In stock",
+    "yes": "Yes",
+    "no": "No",
+    "statsHeading": "Price summary",
+    "statsCaption": "Low, high and average at {retailer} ({sku})",
+    "window": "Window",
+    "windowDays": "{days} days",
+    "observations": "Observations",
+    "empty": "No price history for this product yet.",
+    "notFound": "We could not find that product.",
+    "hidden": "{count} store listings hidden because they need a membership you do not hold."
+  },
+  "calculator": {
+    "heading": "Cost calculator",
+    "intro": "Work out a product's profit and ROI with the same maths as search.",
+    "sellPrice": "Amazon selling price (MXN)",
+    "buyPrice": "Store purchase price (MXN)",
+    "fees": "Amazon fees (MXN)",
+    "prep": "Prep per unit (MXN)",
+    "shipping": "Shipping per unit (MXN)",
+    "monthlyFixed": "Monthly fixed costs (MXN)",
+    "unitsPerMonth": "Units sold per month",
+    "submit": "Calculate",
+    "resultHeading": "Result",
+    "profit": "Profit per unit",
+    "roi": "ROI",
+    "margin": "Margin",
+    "totalCost": "Total cost per unit",
+    "fixedPerUnit": "Fixed costs per unit",
+    "errors": {
+      "invalidAmount": "Check the amounts: they must be positive numbers.",
+      "zero_units": "Enter units per month to spread the fixed costs.",
+      "overflow": "The amounts are too large."
+    }
+  },
+  "retailers": {
+    "bodega_aurrera": "Bodega Aurrera",
+    "chedraui": "Chedraui",
+    "costco_mx": "Costco",
+    "heb_mx": "H-E-B",
+    "liverpool": "Liverpool",
+    "mercadolibre": "Mercado Libre",
+    "palacio_de_hierro": "El Palacio de Hierro",
+    "sams_mx": "Sam's Club",
+    "sanborns": "Sanborns",
+    "sears_mx": "Sears",
+    "waldos": "Waldo's",
+    "walmart_mx": "Walmart"
+  }
+}

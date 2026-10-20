@@ -6,14 +6,14 @@
 use app::{
     AmazonSource, AmazonSourceError, CatalogItem, MatchRepo, PriceHistoryRepo, UpsertOutcome,
 };
-use domain::{MatchStatus, Offer, UnixMillis};
+use domain::{Offer, ProductMatch, UnixMillis};
 use matching::{Candidate, MatchConfig, match_offer};
 
 /// What [`match_and_store`] stored.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchOutcome {
-    /// A match was stored with this status.
-    Stored(MatchStatus),
+    /// This match was stored.
+    Stored(ProductMatch),
     /// A match was found, but a reviewer had rejected the listing's stored
     /// match, so the rejection was kept and nothing new was stored.
     KeptRejected,
@@ -79,7 +79,6 @@ fn candidates(items: Vec<CatalogItem>) -> Vec<Candidate> {
 /// # Errors
 /// [`OfferMatchError::Storage`] if a write fails;
 /// [`OfferMatchError::Amazon`] if a lookup fails (no match is stored).
-#[cfg_attr(not(test), expect(dead_code, reason = "called by the store-fetch job"))]
 pub async fn match_and_store(
     amazon: &dyn AmazonSource,
     matches: &dyn MatchRepo,
@@ -124,7 +123,7 @@ pub async fn match_and_store(
         .await
         .map_err(|_| OfferMatchError::Storage)?;
     Ok(match written {
-        UpsertOutcome::Written => MatchOutcome::Stored(found.status),
+        UpsertOutcome::Written => MatchOutcome::Stored(found),
         UpsertOutcome::KeptRejected => MatchOutcome::KeptRejected,
     })
 }
@@ -138,7 +137,7 @@ mod tests {
         PricePoint, RepoError,
     };
     use domain::{
-        Asin, Availability, Gtin, MatchMethod, PriceMxn, ProductMatch, RetailerId, RetailerSku,
+        Asin, Availability, Gtin, MatchMethod, MatchStatus, PriceMxn, RetailerId, RetailerSku,
     };
 
     use super::*;
@@ -324,11 +323,18 @@ mod tests {
         (out, matches, prices)
     }
 
+    fn status(out: &Result<MatchOutcome, OfferMatchError>) -> Option<MatchStatus> {
+        match out {
+            Ok(MatchOutcome::Stored(m)) => Some(m.status),
+            _ => None,
+        }
+    }
+
     #[tokio::test]
     async fn gtin_hit_skips_keyword_lookup() {
         let amazon = FakeAmazon::new(Ok(vec![item("B000000001", "Oster blender")]), Ok(vec![]));
         let (out, matches, prices) = run(&amazon, &offer(Some("7501055300075"))).await;
-        assert_eq!(out, Ok(MatchOutcome::Stored(MatchStatus::Accepted)));
+        assert_eq!(status(&out), Some(MatchStatus::Accepted));
         assert_eq!(amazon.calls(), ["gtin:7501055300075"]);
         let stored = matches.upserted.lock().unwrap();
         assert_eq!(stored[0].method, MatchMethod::Gtin);
@@ -346,7 +352,7 @@ mod tests {
             )]),
         );
         let (out, matches, _) = run(&amazon, &offer(Some("7501055300075"))).await;
-        assert_eq!(out, Ok(MatchOutcome::Stored(MatchStatus::Accepted)));
+        assert_eq!(status(&out), Some(MatchStatus::Accepted));
         assert_eq!(
             amazon.calls(),
             [
@@ -370,7 +376,7 @@ mod tests {
             )]),
         );
         let (out, matches, _) = run(&amazon, &offer(None)).await;
-        assert_eq!(out, Ok(MatchOutcome::Stored(MatchStatus::NeedsReview)));
+        assert_eq!(status(&out), Some(MatchStatus::NeedsReview));
         assert_eq!(amazon.calls().len(), 1, "no GTIN, keyword lookup only");
         assert_eq!(
             matches.upserted.lock().unwrap()[0].status,

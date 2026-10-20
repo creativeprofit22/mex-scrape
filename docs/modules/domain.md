@@ -38,6 +38,22 @@ margin_bp           = round(profit × 10000 / sell_price)    None when sell_pric
 - Errors: `RoiError::ZeroUnits` when `monthly_fixed > 0` and `units_per_month = 0` (with no fixed costs, units are ignored); `RoiError::Overflow` when a result does not fit in 64 bits.
 - Worked example: sell 599.00, buy 300.00, fees 120.50, prep 15.00, shipping 20.00, fixed 1 500.00/month over 300 units → fixed/unit 5.00, total cost 340.00, profit 138.50, ROI 4074 bp (40.74%), margin 2312 bp (23.12%).
 
+## Searches and tenants
+
+- `SearchQuery::parse(raw)`: trims and collapses whitespace; 1–`MAX_SEARCH_QUERY_CHARS` (100) characters, else `SearchQueryError::{Empty, TooLong}`. Same rule as the retailer adapters' own check.
+- `TenantId::new`: 1–100 bytes of `[A-Za-z0-9_.:-]` (the `tenant_id` column rule; errors never echo the value). `TenantId::for_user(UserId)` is `user-<id>`, the tenant of every signed-in user's searches (ADR 0012); `TenantId::system()` is `system` (scheduled jobs). `TenantId::default_tenant()` (`default`) was the API tenant before accounts (ADR 0011).
+- `SearchStatus { Queued, Running, Done, Partial, Failed, Refused }` (`is_terminal` for the last four) and `RetailerSearchOutcome { Ok, CategoryOnly, BlockedNeedsKyc, SkippedRobots, Failed, NoOffers }` (`is_failure` for blocked, skipped and failed), both with `as_str`/`parse` matching the `searches`/`search_retailers` CHECKs.
+
+## Accounts
+
+ADR 0012; used by `app::account` and `db::users`.
+
+- `UserId`: positive `i64` (`new` returns `None` otherwise).
+- `Email::parse`: trimmed and lowercased; at most `MAX_EMAIL_BYTES` (254) bytes, exactly one `@` with a non-empty local part and a dotted domain, no whitespace or control characters. `EmailError` never echoes the value.
+- `check_new_password`: `MIN_PASSWORD_CHARS` (8) to `MAX_PASSWORD_CHARS` (128) characters, else `PasswordPolicyError::{TooShort, TooLong}`.
+- `Plan { Free, Pro }` and `Locale { Es, En }` (Spanish is the default), both with `as_str`/`parse` matching the `users` CHECKs.
+- `Memberships { costco, sams }`: `allows(membership_required, &RetailerId)` passes every offer that needs no membership, passes `costco_mx` / `sams_mx` (`COSTCO_RETAILER_ID`, `SAMS_RETAILER_ID`) only with that membership, and hides any other membership store (fails closed). `is_membership_retailer(&RetailerId)` is true for exactly `costco_mx` and `sams_mx`; a `retailers` registry test keeps it equal to the registry's `membership_required` flags. Price stats and series use it to hide product-page listings.
+
 ## Price history
 
 - `window_stats` covers `[now − days·DAY_MS, now]`, inclusive at both ends. `now` comes from the caller (an injected `app::Clock`), never the system time.

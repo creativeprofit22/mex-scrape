@@ -21,6 +21,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/csrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The session's CSRF token, created on first use (signed in or not). */
+        get: operations["csrf_token"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/signin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Signs in with e-mail and password. */
+        post: operations["sign_in"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/signout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ends the session (deletes it server-side and expires the cookie). */
+        post: operations["sign_out"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates an account and signs it in. */
+        post: operations["sign_up"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -38,6 +106,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in account. */
+        get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/locale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Stores the user's preferred language. */
+        put: operations["update_locale"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Stores the user's store memberships and completes onboarding. Offers
+         *     that need a membership the user lacks are hidden from search results.
+         */
+        put: operations["update_onboarding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{asin}/price-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Daily low/high price per matched retailer listing, for the product
+         *     chart. Listings needing a membership the user lacks are left out and
+         *     counted.
+         */
+        get: operations["product_price_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/{asin}/price-stats": {
         parameters: {
             query?: never;
@@ -47,9 +190,71 @@ export interface paths {
         };
         /**
          * Lowest, highest and average retailer price over 30, 90 and 365 days for
-         *     every retailer listing matched (accepted) to an Amazon product.
+         *     every retailer listing matched (accepted) to an Amazon product. Listings
+         *     needing a membership the user lacks are left out and counted.
          */
         get: operations["product_price_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/roi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Profit, ROI and margin per unit for up to 100 items, using the same
+         *     calculation as search results.
+         */
+        post: operations["calculate_roi"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/searches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueue a background search across retailers and Amazon for the
+         *     signed-in user.
+         */
+        post: operations["start_search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/searches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A search of the signed-in user: status, per-retailer outcomes and
+         *     results with ROI. Results needing a membership the user lacks are left
+         *     out and counted in `hidden_results`.
+         */
+        get: operations["get_search"];
         put?: never;
         post?: never;
         delete?: never;
@@ -62,10 +267,52 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description The session's CSRF token. */
+        CsrfResponse: {
+            /** @description Send as `X-CSRF-Token` on every non-GET request. */
+            csrf_token: string;
+        };
+        /** @description One UTC day of a listing's prices. */
+        DailyPriceResponse: {
+            /**
+             * Format: int64
+             * @description Start of the UTC day (epoch milliseconds).
+             */
+            day_ms: number;
+            /**
+             * Format: int64
+             * @description Highest price seen that day, in centavos.
+             */
+            high_centavos: number;
+            /** @description Whether any observation that day was in stock. */
+            in_stock: boolean;
+            /**
+             * Format: int64
+             * @description Lowest price seen that day, in centavos.
+             */
+            low_centavos: number;
+        };
+        /** @description Error body: a fixed, machine-readable code (the web app translates it). */
+        ErrorResponse: {
+            /**
+             * @description E.g. `invalid_email`, `weak_password`, `email_taken`,
+             *     `invalid_credentials`, `unauthenticated`, `csrf`, `rate_limited`.
+             */
+            error: string;
+        };
         /** @description Liveness response for `GET /health`. */
         HealthResponse: {
             /** @description Always `"ok"` when the process is serving requests. */
             status: string;
+        };
+        /** @description Daily prices for one retailer listing matched to the product. */
+        ListingPriceSeriesResponse: {
+            /** @description Days with observations, oldest first. */
+            points: components["schemas"]["DailyPriceResponse"][];
+            /** @description Retailer id, e.g. `walmart_mx`. */
+            retailer: string;
+            /** @description The retailer's product id. */
+            retailer_sku: string;
         };
         /** @description Price windows for one retailer listing matched to the product. */
         ListingPriceStatsResponse: {
@@ -76,6 +323,64 @@ export interface components {
             /** @description 30, 90 and 365-day windows, shortest first. */
             windows: components["schemas"]["PriceWindowResponse"][];
         };
+        /** @description Body of `PUT /me/locale`. */
+        LocaleRequest: {
+            /** @description `es` or `en`. */
+            locale: string;
+        };
+        /** @description The account as shown to its owner. */
+        MeResponse: {
+            /** @description Normalized e-mail address. */
+            email: string;
+            /** @description Holds a Costco membership. */
+            has_costco: boolean;
+            /** @description Holds a Sam's Club membership. */
+            has_sams: boolean;
+            /**
+             * Format: int64
+             * @description User id.
+             */
+            id: number;
+            /** @description Preferred language: `es` or `en`. */
+            locale: string;
+            /** @description Whether onboarding (memberships) is done. */
+            onboarded: boolean;
+            /** @description `free` or `pro`. */
+            plan: string;
+        };
+        /** @description Body of `PUT /me/onboarding`. */
+        OnboardingRequest: {
+            /** @description Holds a Costco membership. */
+            has_costco: boolean;
+            /** @description Holds a Sam's Club membership. */
+            has_sams: boolean;
+        };
+        /** @description Daily price series for an Amazon product across matched listings. */
+        PriceHistoryResponse: {
+            /**
+             * Format: int64
+             * @description End of the series (epoch milliseconds).
+             */
+            as_of_ms: number;
+            /** @description The Amazon product. */
+            asin: string;
+            /**
+             * Format: int32
+             * @description Listings left out because they need a store membership (Costco,
+             *     Sam's Club) the user lacks.
+             */
+            hidden_listings: number;
+            /**
+             * @description One entry per accepted listing the user may see, sorted by retailer
+             *     then SKU.
+             */
+            listings: components["schemas"]["ListingPriceSeriesResponse"][];
+            /**
+             * Format: int64
+             * @description Start of the series (epoch milliseconds).
+             */
+            since_ms: number;
+        };
         /** @description Price stats for an Amazon product across matched retailer listings. */
         PriceStatsResponse: {
             /**
@@ -85,7 +390,16 @@ export interface components {
             as_of_ms: number;
             /** @description The Amazon product. */
             asin: string;
-            /** @description One entry per accepted listing, sorted by retailer then SKU. */
+            /**
+             * Format: int32
+             * @description Listings left out because they need a store membership (Costco,
+             *     Sam's Club) the user lacks.
+             */
+            hidden_listings: number;
+            /**
+             * @description One entry per accepted listing the user may see, sorted by retailer
+             *     then SKU.
+             */
             listings: components["schemas"]["ListingPriceStatsResponse"][];
         };
         /**
@@ -146,6 +460,234 @@ export interface components {
              */
             skipped_robots: number;
         };
+        /** @description One item to evaluate. Amounts are integer centavos (0 or more). */
+        RoiItemRequest: {
+            /**
+             * Format: int64
+             * @description Amazon fees for one unit at the selling price.
+             */
+            amazon_fees_centavos: number;
+            /**
+             * Format: int64
+             * @description Retailer purchase price.
+             */
+            buy_price_centavos: number;
+            /**
+             * Format: int64
+             * @description Monthly fixed costs spread over `units_per_month`.
+             */
+            monthly_fixed_centavos?: number;
+            /**
+             * Format: int64
+             * @description Prep-center fee per unit.
+             */
+            prep_fee_centavos?: number;
+            /**
+             * Format: int64
+             * @description Amazon selling price.
+             */
+            sell_price_centavos: number;
+            /**
+             * Format: int64
+             * @description Inbound shipping per unit.
+             */
+            shipping_centavos?: number;
+            /**
+             * Format: int32
+             * @description Units sold per month (needed when monthly fixed costs are set).
+             */
+            units_per_month?: number;
+        };
+        /**
+         * @description Result for one item, in input order. Money is centavos, ratios basis
+         *     points. `error` is set (and the numbers absent) when the item cannot be
+         *     computed.
+         */
+        RoiItemResponse: {
+            /** @description `zero_units` (fixed costs without units) or `overflow`. */
+            error?: string | null;
+            /**
+             * Format: int64
+             * @description Share of the monthly fixed costs per unit.
+             */
+            fixed_cost_per_unit_centavos?: number | null;
+            /**
+             * Format: int64
+             * @description Profit over selling price.
+             */
+            margin_bp?: number | null;
+            /**
+             * Format: int64
+             * @description Profit per unit (negative for a loss).
+             */
+            profit_centavos?: number | null;
+            /**
+             * Format: int64
+             * @description Profit over total cost.
+             */
+            roi_bp?: number | null;
+            /**
+             * Format: int64
+             * @description Buy + prep + shipping + fixed share.
+             */
+            total_cost_centavos?: number | null;
+        };
+        /** @description Body of `POST /roi`. */
+        RoiRequest: {
+            /** @description 1–100 items. */
+            items: components["schemas"]["RoiItemRequest"][];
+        };
+        /** @description Body of a `POST /roi` response. */
+        RoiResponse: {
+            /** @description One result per item, in input order. */
+            results: components["schemas"]["RoiItemResponse"][];
+        };
+        /** @description A search was enqueued. */
+        SearchCreatedResponse: {
+            /**
+             * Format: int64
+             * @description Id to poll with `GET /searches/{id}`.
+             */
+            id: number;
+        };
+        /**
+         * @description Amazon match and ROI for one result. Money is integer centavos and
+         *     ratios are basis points.
+         */
+        SearchMatchResponse: {
+            /**
+             * Format: int64
+             * @description Amazon selling price used (buy box, else lowest new), in centavos.
+             */
+            amazon_price_centavos?: number | null;
+            /** @description Matched Amazon product. */
+            asin: string;
+            /**
+             * Format: int32
+             * @description Matcher confidence, basis points (0–10000).
+             */
+            confidence_bp: number;
+            /**
+             * Format: int64
+             * @description Estimated Amazon fees at that price, in centavos.
+             */
+            fees_centavos?: number | null;
+            /**
+             * Format: int64
+             * @description Profit over selling price, basis points.
+             */
+            margin_bp?: number | null;
+            /** @description `accepted` or `needs_review`. */
+            match_status: string;
+            /**
+             * Format: int64
+             * @description Profit per unit, in centavos (negative for a loss).
+             */
+            profit_centavos?: number | null;
+            /**
+             * Format: int64
+             * @description Profit over total cost, basis points.
+             */
+            roi_bp?: number | null;
+        };
+        /** @description A search with its status, per-retailer outcomes and results. */
+        SearchResponse: {
+            /**
+             * Format: int64
+             * @description When the search was created (epoch milliseconds).
+             */
+            created_at_ms: number;
+            /**
+             * Format: int64
+             * @description When it finished (epoch milliseconds).
+             */
+            finished_at_ms?: number | null;
+            /**
+             * Format: int32
+             * @description Results hidden because they need a store membership the user lacks.
+             */
+            hidden_results: number;
+            /**
+             * Format: int64
+             * @description Search id.
+             */
+            id: number;
+            /** @description The cleaned query. */
+            query: string;
+            /** @description Fixed reason code for `partial`, `failed` or `refused`. */
+            reason?: string | null;
+            /** @description Results, sorted by retailer then SKU. */
+            results: components["schemas"]["SearchResultResponse"][];
+            /** @description Per-retailer outcomes, sorted by retailer. */
+            retailers: components["schemas"]["SearchRetailerResponse"][];
+            /** @description `queued`, `running`, `done`, `partial`, `failed` or `refused`. */
+            status: string;
+        };
+        /** @description One retailer offer found by a search. */
+        SearchResultResponse: {
+            amazon?: components["schemas"]["SearchMatchResponse"] | null;
+            /** @description `in_stock`, `out_of_stock` or `unknown` when the offer was seen. */
+            availability: string;
+            /** @description Buying needs a store membership (Costco, Sam's Club) the user holds. */
+            membership_required: boolean;
+            /**
+             * Format: int64
+             * @description Retailer price, in centavos.
+             */
+            price_centavos: number;
+            /** @description Retailer id. */
+            retailer: string;
+            /** @description The retailer's product id. */
+            retailer_sku: string;
+            /** @description Listing title. */
+            title: string;
+            /** @description Listing URL. */
+            url: string;
+        };
+        /** @description What one retailer contributed to a search. */
+        SearchRetailerResponse: {
+            /**
+             * Format: int32
+             * @description Offers it returned.
+             */
+            offers: number;
+            /**
+             * @description `ok`, `category_only` (no keyword search; covered by scheduled
+             *     category browsing), `blocked_needs_kyc`, `skipped_robots`, `failed`
+             *     or `no_offers`.
+             */
+            outcome: string;
+            /** @description Retailer id, e.g. `walmart_mx`. */
+            retailer: string;
+        };
+        /** @description A new session: the account and its fresh CSRF token. */
+        SessionResponse: {
+            /** @description Send as `X-CSRF-Token` on every non-GET request. */
+            csrf_token: string;
+            /** @description The signed-in account. */
+            user: components["schemas"]["MeResponse"];
+        };
+        /** @description Body of `POST /auth/signin`. */
+        SignInRequest: {
+            /** @description E-mail address. */
+            email: string;
+            /** @description Password. */
+            password: string;
+        };
+        /** @description Body of `POST /auth/signup`. */
+        SignUpRequest: {
+            /** @description E-mail address. */
+            email: string;
+            /** @description `es` (default) or `en`. */
+            locale?: string | null;
+            /** @description 8–128 characters. */
+            password: string;
+        };
+        /** @description Body of `POST /searches`. */
+        StartSearchRequest: {
+            /** @description Keywords, 1–100 characters after trimming and collapsing spaces. */
+            query: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -196,6 +738,281 @@ export interface operations {
             };
         };
     };
+    csrf_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Session could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sign_in: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_credentials` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Session could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sign_out: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Session could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sign_up: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignUpRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created and signed in */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `email_taken` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_email`, `weak_password` or `invalid_locale` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Session could not be stored */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -212,6 +1029,271 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_locale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocaleRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_locale` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_onboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    product_price_history: {
+        parameters: {
+            query?: {
+                /** @description Days back from now, 1–365 (default 365). */
+                days?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Amazon ASIN (10 letters or digits) */
+                asin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Daily series per listing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceHistoryResponse"];
+                };
+            };
+            /** @description Not a valid ASIN or query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `days` outside 1–365 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Price history could not be read */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Price history is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -242,21 +1324,278 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Price history could not be read */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Price history is not configured */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    calculate_roi: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoiRequest"];
+            };
+        };
+        responses: {
+            /** @description One result per item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoiResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_amount`, `empty` or `too_many` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Accounts are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_search: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Search enqueued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchCreatedResponse"];
+                };
+            };
+            /** @description Body is not JSON */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF check failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing, empty or too long query */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Search could not be enqueued */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Search API is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_search: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Search id from `POST /searches` */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The search */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such search for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Plan rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Search could not be read */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Search API is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };

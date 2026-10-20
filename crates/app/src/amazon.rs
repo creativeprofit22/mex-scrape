@@ -1,12 +1,13 @@
-//! Amazon source routing: SP-API first, Bright Data only as a fallback.
+//! Amazon source routing: SP-API first, Bright Data only as a fallback,
+//! and a spending guard in front of both.
 
 use std::sync::Arc;
 
-use domain::{Asin, Gtin, PriceMxn};
+use domain::{Asin, Gtin, PriceMxn, TenantId};
 
 use crate::ports::{
-    AmazonSource, AmazonSourceError, CatalogResult, FeeEstimate, Fulfillment, OfferSummary,
-    PortFuture,
+    AmazonSource, AmazonSourceError, BudgetError, CatalogResult, FeeEstimate, Fulfillment,
+    OfferSummary, PortFuture, RequestBudget,
 };
 
 /// An [`AmazonSource`] that asks `primary` first and `fallback` only when
@@ -91,6 +92,87 @@ impl AmazonSource for FallbackAmazonSource {
         fulfillment: Fulfillment,
     ) -> PortFuture<'a, Result<FeeEstimate, AmazonSourceError>> {
         self.route(move |s| s.fees(asin, price, fulfillment))
+    }
+}
+
+/// An [`AmazonSource`] that takes one request from `tenant`'s
+/// [`RequestBudget`] (which also checks the global kill switch) before
+/// every call to `inner`. A refusal, or a budget store that cannot answer,
+/// returns [`AmazonSourceError::Refused`] without calling `inner`: the
+/// guard fails closed and a refusal never falls back.
+pub struct GatedAmazonSource {
+    inner: Arc<dyn AmazonSource>,
+    budget: Arc<dyn RequestBudget>,
+    tenant: TenantId,
+}
+
+impl GatedAmazonSource {
+    /// Guards `inner` (normally a [`FallbackAmazonSource`]) with `budget`.
+    #[must_use]
+    pub fn new(
+        inner: Arc<dyn AmazonSource>,
+        budget: Arc<dyn RequestBudget>,
+        tenant: TenantId,
+    ) -> Self {
+        Self {
+            inner,
+            budget,
+            tenant,
+        }
+    }
+
+    /// The tenant whose budget pays for calls.
+    #[must_use]
+    pub fn tenant(&self) -> &TenantId {
+        &self.tenant
+    }
+
+    fn gate<'a, T: Send + 'a>(
+        &'a self,
+        call: impl FnOnce(&'a dyn AmazonSource) -> PortFuture<'a, Result<T, AmazonSourceError>>
+        + Send
+        + 'a,
+    ) -> PortFuture<'a, Result<T, AmazonSourceError>> {
+        Box::pin(async move {
+            match self.budget.consume(&self.tenant, 1).await {
+                Ok(()) => call(self.inner.as_ref()).await,
+                Err(
+                    BudgetError::KillSwitch | BudgetError::CapReached | BudgetError::Unavailable,
+                ) => Err(AmazonSourceError::Refused),
+            }
+        })
+    }
+}
+
+impl AmazonSource for GatedAmazonSource {
+    fn catalog_by_gtin<'a>(
+        &'a self,
+        gtin: &'a Gtin,
+    ) -> PortFuture<'a, Result<CatalogResult, AmazonSourceError>> {
+        self.gate(move |s| s.catalog_by_gtin(gtin))
+    }
+
+    fn catalog_by_keyword<'a>(
+        &'a self,
+        keywords: &'a str,
+    ) -> PortFuture<'a, Result<CatalogResult, AmazonSourceError>> {
+        self.gate(move |s| s.catalog_by_keyword(keywords))
+    }
+
+    fn offers<'a>(
+        &'a self,
+        asin: &'a Asin,
+    ) -> PortFuture<'a, Result<OfferSummary, AmazonSourceError>> {
+        self.gate(move |s| s.offers(asin))
+    }
+
+    fn fees<'a>(
+        &'a self,
+        asin: &'a Asin,
+        price: PriceMxn,
+        fulfillment: Fulfillment,
+    ) -> PortFuture<'a, Result<FeeEstimate, AmazonSourceError>> {
+        self.gate(move |s| s.fees(asin, price, fulfillment))
     }
 }
 
@@ -258,6 +340,88 @@ mod tests {
             only_sp.catalog_by_gtin(&gtin()).await.unwrap_err(),
             AmazonSourceError::NotAuthorized
         );
+    }
+
+    #[tokio::test]
+    async fn refused_primary_never_falls_back() {
+        let sp = Fake::new(AmazonDataSource::SpApi, Err(AmazonSourceError::Refused));
+        let bd = Fake::new(AmazonDataSource::BrightData, Ok(()));
+        let r = routed(Some(&sp), Some(&bd));
+        assert_eq!(
+            r.catalog_by_gtin(&gtin()).await.unwrap_err(),
+            AmazonSourceError::Refused
+        );
+        assert_eq!(bd.calls.load(Ordering::SeqCst), 0);
+    }
+
+    /// Answers every `consume` with `result` and counts calls.
+    struct FakeBudget {
+        result: Result<(), BudgetError>,
+        calls: AtomicU32,
+    }
+
+    impl RequestBudget for FakeBudget {
+        fn consume<'a>(
+            &'a self,
+            tenant: &'a TenantId,
+            n: u32,
+        ) -> PortFuture<'a, Result<(), BudgetError>> {
+            Box::pin(async move {
+                assert_eq!(tenant.as_str(), "acme");
+                assert_eq!(n, 1);
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                self.result
+            })
+        }
+    }
+
+    fn gated(
+        inner: &Arc<Fake>,
+        result: Result<(), BudgetError>,
+    ) -> (GatedAmazonSource, Arc<FakeBudget>) {
+        let budget = Arc::new(FakeBudget {
+            result,
+            calls: AtomicU32::new(0),
+        });
+        let g = GatedAmazonSource::new(
+            inner.clone(),
+            budget.clone(),
+            TenantId::new("acme").unwrap(),
+        );
+        (g, budget)
+    }
+
+    #[tokio::test]
+    async fn gate_takes_one_request_per_call_then_calls_inner() {
+        let sp = Fake::new(AmazonDataSource::SpApi, Ok(()));
+        let (g, budget) = gated(&sp, Ok(()));
+        let asin = Asin::new("B0CHHSFMRL").unwrap();
+        let price = PriceMxn::from_centavos(10_000).unwrap();
+        g.catalog_by_gtin(&gtin()).await.unwrap();
+        g.catalog_by_keyword("taladro").await.unwrap();
+        g.offers(&asin).await.unwrap();
+        g.fees(&asin, price, Fulfillment::Fba).await.unwrap();
+        assert_eq!(budget.calls.load(Ordering::SeqCst), 4);
+        assert_eq!(sp.calls.load(Ordering::SeqCst), 4);
+        assert_eq!(g.tenant().as_str(), "acme");
+    }
+
+    #[tokio::test]
+    async fn gate_refuses_before_calling_inner() {
+        for err in [
+            BudgetError::KillSwitch,
+            BudgetError::CapReached,
+            BudgetError::Unavailable,
+        ] {
+            let sp = Fake::new(AmazonDataSource::SpApi, Ok(()));
+            let (g, _) = gated(&sp, Err(err));
+            assert_eq!(
+                g.catalog_by_keyword("taladro").await.unwrap_err(),
+                AmazonSourceError::Refused,
+                "{err:?}"
+            );
+            assert_eq!(sp.calls.load(Ordering::SeqCst), 0, "{err:?}");
+        }
     }
 
     #[tokio::test]

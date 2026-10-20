@@ -1,0 +1,48 @@
+{
+  "listings": [
+    {
+      "retailer": "sears_mx",
+      "url": "https://www.sears.com.mx/cat/l%C3%ADnea%20blanca%20y%20electrodom%C3%A9sticos/electrodom%C3%A9sticos%20de%20cocina/licuadoras%20y%20picadoras?id=4714"
+    },
+    {
+      "retailer": "sears_mx",
+      "url": "https://www.sears.com.mx/cat/videojuegos?id=16649"
+    },
+    {
+      "retailer": "sears_mx",
+      "url": "https://www.sears.com.mx/cat/hogar/cocina/sartenes%20y%20comales?id=10691"
+    },
+    {
+      "retailer": "sears_mx",
+      "url": "https://www.sears.com.mx/cat/hogar/cocina/ollas%20a%20presi%C3%B3n?id=10906"
+    },
+    {
+      "retailer": "sears_mx",
+      "url": "https://www.sears.com.mx/cat/hogar/cocina/utensilios%20de%20cocina?id=4705"
+    },
+    {
+      "retailer": "sanborns",
+      "url": "https://www.sanborns.com.mx/cat/tecnolog%C3%ADa%20y%20electr%C3%B3nica/tv%20y%20video/pantallas?id=100609"
+    },
+    {
+      "retailer": "sanborns",
+      "url": "https://www.sanborns.com.mx/cat/tecnolog%C3%ADa%20y%20electr%C3%B3nica/audio/aud%C3%ADfonos?id=100102"
+    },
+    {
+      "retailer": "sanborns",
+      "url": "https://www.sanborns.com.mx/cat/tecnolog%C3%ADa%20y%20electr%C3%B3nica/c%C3%B3mputo/laptops?id=100208"
+    },
+    {
+      "retailer": "sanborns",
+      "url": "https://www.sanborns.com.mx/cat/videojuegos/xbox/consolas?id=120101"
+    },
+    {
+      "retailer": "sanborns",
+      "url": "https://www.sanborns.com.mx/cat/moda%20y%20belleza/estilismo/secadoras?id=61901"
+    },
+    {
+      "retailer": "sanborns",
+      "url": "https://www.sanborns.com.mx/cat/hogar%20y%20oficina/electrodom%C3%A9sticos/preparaci%C3%B3n%20de%20bebidas?id=10802"
+    }
+  ]
+}

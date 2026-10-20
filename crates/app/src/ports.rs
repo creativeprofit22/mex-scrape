@@ -9,7 +9,9 @@ use std::future::Future;
 use std::pin::Pin;
 
 use domain::{
-    Asin, Availability, Gtin, Offer, PriceMxn, ProductMatch, RetailerId, RetailerSku, UnixMillis,
+    Asin, Availability, Confidence, Email, Gtin, Locale, MatchStatus, Memberships, Offer, Plan,
+    PriceMxn, ProductMatch, RetailerId, RetailerSearchOutcome, RetailerSku, SearchQuery,
+    SearchStatus, TenantId, UnixMillis, UserId,
 };
 
 /// Boxed future returned by async port methods.
@@ -195,6 +197,10 @@ pub enum AmazonSourceError {
     /// The response could not be understood (or was not in MXN).
     #[error("Amazon response could not be parsed")]
     ParseFailed,
+    /// Refused before any call: the global kill switch is on or the
+    /// tenant's daily Amazon request cap is reached. Never falls back.
+    #[error("Amazon request refused by the spending guard")]
+    Refused,
 }
 
 /// Amazon.com.mx catalog, offer and fee lookups. All money is MXN.
@@ -330,4 +336,231 @@ pub struct HostAccess {
 pub trait AccessCountsRepo: Send + Sync {
     /// Outcome totals per host.
     fn counts_by_host(&self) -> PortFuture<'_, Result<Vec<HostAccess>, RepoError>>;
+}
+
+/// Why a [`RequestBudget`] refused or could not answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum BudgetError {
+    /// The global kill switch is on (or safety settings are missing).
+    #[error("kill switch is on")]
+    KillSwitch,
+    /// The tenant's daily cap would be exceeded.
+    #[error("daily request cap reached")]
+    CapReached,
+    /// The budget store could not be read; callers fail closed.
+    #[error("request budget unavailable")]
+    Unavailable,
+}
+
+/// A per-tenant daily budget of paid Amazon requests (SP-API or the
+/// Bright Data fallback), checked together with the global kill switch.
+/// Implemented by `db::usage::PgRequestBudget`.
+pub trait RequestBudget: Send + Sync {
+    /// Atomically takes `n` requests from `tenant`'s budget for today, or
+    /// takes nothing and refuses.
+    fn consume<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        n: u32,
+    ) -> PortFuture<'a, Result<(), BudgetError>>;
+}
+
+/// Id of a stored search.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SearchId(pub i64);
+
+/// What one retailer contributed to a search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetailerOutcomeView {
+    /// The retailer.
+    pub retailer: RetailerId,
+    /// Its outcome.
+    pub outcome: RetailerSearchOutcome,
+    /// Offers it returned.
+    pub offers: u32,
+}
+
+/// The Amazon side of a search result, when a match was found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResultMatchView {
+    /// Matched Amazon product.
+    pub asin: Asin,
+    /// Review state of the match.
+    pub status: MatchStatus,
+    /// Matcher confidence.
+    pub confidence: Confidence,
+    /// Amazon selling price used for ROI (buy box, else lowest new).
+    pub amazon_price_mxn: Option<PriceMxn>,
+    /// Estimated Amazon fees at that price.
+    pub fees_mxn: Option<PriceMxn>,
+    /// Profit per unit in centavos (negative for a loss).
+    pub profit_centavos: Option<i64>,
+    /// Profit over total cost, basis points.
+    pub roi_bp: Option<i64>,
+    /// Profit over selling price, basis points.
+    pub margin_bp: Option<i64>,
+}
+
+/// One retailer offer found by a search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchResultView {
+    /// The retailer.
+    pub retailer: RetailerId,
+    /// Retailer SKU.
+    pub retailer_sku: RetailerSku,
+    /// Listing title.
+    pub title: String,
+    /// Listing URL.
+    pub url: String,
+    /// Retailer price.
+    pub price_mxn: PriceMxn,
+    /// Stock state when the offer was seen.
+    pub availability: Availability,
+    /// Whether buying needs a paid store membership (Costco, Sam's Club).
+    pub membership_required: bool,
+    /// Amazon match and ROI, when found.
+    pub amazon: Option<ResultMatchView>,
+}
+
+/// A stored search with its outcomes and results.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchView {
+    /// Search id.
+    pub id: SearchId,
+    /// The cleaned query.
+    pub query: String,
+    /// Job status.
+    pub status: SearchStatus,
+    /// Fixed reason code for `failed`/`refused`/`partial` (empty otherwise).
+    pub reason: String,
+    /// When the search was created.
+    pub created_at: UnixMillis,
+    /// When it reached a terminal status.
+    pub finished_at: Option<UnixMillis>,
+    /// Per-retailer outcomes, sorted by retailer.
+    pub retailers: Vec<RetailerOutcomeView>,
+    /// Results, sorted by retailer then SKU.
+    pub results: Vec<SearchResultView>,
+    /// Results hidden because they need a membership the reader lacks
+    /// (always 0 as stored; set by [`crate::SearchResults`]).
+    pub hidden_results: u32,
+}
+
+/// Stored searches (implemented by `db::searches::PgSearches`).
+pub trait SearchRepo: Send + Sync {
+    /// Stores a `queued` search and enqueues its job in one transaction.
+    fn create_and_enqueue<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        query: &'a SearchQuery,
+    ) -> PortFuture<'a, Result<SearchId, RepoError>>;
+
+    /// The tenant's search `id`; `None` if unknown or owned by another
+    /// tenant.
+    fn load<'a>(
+        &'a self,
+        tenant: &'a TenantId,
+        id: SearchId,
+    ) -> PortFuture<'a, Result<Option<SearchView>, RepoError>>;
+}
+
+/// A stored user account, without its password hash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserRecord {
+    /// User id.
+    pub id: UserId,
+    /// Normalized sign-in address.
+    pub email: Email,
+    /// The tenant owning the user's data (`user-<id>`).
+    pub tenant: TenantId,
+    /// Subscription plan.
+    pub plan: Plan,
+    /// Store memberships.
+    pub memberships: Memberships,
+    /// Whether onboarding (memberships) was completed.
+    pub onboarded: bool,
+    /// Preferred UI language.
+    pub locale: Locale,
+}
+
+/// A user with the stored password hash, for sign-in only.
+#[derive(Clone, PartialEq, Eq)]
+pub struct UserCredentials {
+    /// The account.
+    pub user: UserRecord,
+    /// PHC-format password hash.
+    pub password_hash: String,
+}
+
+impl std::fmt::Debug for UserCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UserCredentials")
+            .field("user", &self.user)
+            .field("password_hash", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Why a user could not be created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum CreateUserError {
+    /// Another account already uses this address.
+    #[error("e-mail address already registered")]
+    EmailTaken,
+    /// Storage could not be written.
+    #[error("storage unavailable")]
+    Unavailable,
+}
+
+/// Stored user accounts (implemented by `db::users::PgUsers`). Every query
+/// is keyed by user id or e-mail; the tenant is derived from the id.
+pub trait UserRepo: Send + Sync {
+    /// Creates a `free`, not-onboarded account with tenant `user-<id>`.
+    fn create<'a>(
+        &'a self,
+        email: &'a Email,
+        password_hash: &'a str,
+        locale: Locale,
+    ) -> PortFuture<'a, Result<UserRecord, CreateUserError>>;
+
+    /// The account and password hash for `email`, if registered.
+    fn find_credentials<'a>(
+        &'a self,
+        email: &'a Email,
+    ) -> PortFuture<'a, Result<Option<UserCredentials>, RepoError>>;
+
+    /// The account `id`, if it exists.
+    fn find_by_id(&self, id: UserId) -> PortFuture<'_, Result<Option<UserRecord>, RepoError>>;
+
+    /// Stores memberships and marks onboarding done; `None` if `id` is gone.
+    fn set_memberships(
+        &self,
+        id: UserId,
+        memberships: Memberships,
+    ) -> PortFuture<'_, Result<Option<UserRecord>, RepoError>>;
+
+    /// Stores the preferred language; `None` if `id` is gone.
+    fn set_locale(
+        &self,
+        id: UserId,
+        locale: Locale,
+    ) -> PortFuture<'_, Result<Option<UserRecord>, RepoError>>;
+}
+
+/// The password hasher could not hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("password could not be hashed")]
+pub struct HashError;
+
+/// Slow, salted password hashing (implemented in `api` with argon2).
+pub trait PasswordHasher: Send + Sync {
+    /// A PHC-format hash of `password`.
+    fn hash<'a>(&'a self, password: &'a str) -> PortFuture<'a, Result<String, HashError>>;
+
+    /// Whether `password` matches `hash`. A malformed hash never matches.
+    fn verify<'a>(&'a self, password: &'a str, hash: &'a str) -> PortFuture<'a, bool>;
+
+    /// A valid hash of a random secret, verified against when the e-mail is
+    /// unknown so sign-in takes the same time either way.
+    fn dummy_hash(&self) -> &str;
 }

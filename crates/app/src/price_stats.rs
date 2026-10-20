@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use domain::{
-    Asin, DAY_MS, PriceSample, PriceWindow, RetailerId, RetailerSku, STATS_WINDOWS, UnixMillis,
-    window_stats,
+    Asin, DAY_MS, Memberships, PriceSample, PriceWindow, RetailerId, RetailerSku, STATS_WINDOWS,
+    UnixMillis, is_membership_retailer, window_stats,
 };
 
 use crate::ports::{Clock, MatchRepo, PriceHistoryRepo};
@@ -36,8 +36,12 @@ pub struct ProductPriceStats {
     pub asin: Asin,
     /// The instant every window ends at.
     pub as_of: UnixMillis,
-    /// One entry per accepted listing, sorted by retailer then SKU.
+    /// One entry per accepted listing the reader may see, sorted by
+    /// retailer then SKU.
     pub listings: Vec<ListingPriceStats>,
+    /// Accepted listings removed because they need a membership the reader
+    /// lacks.
+    pub hidden_listings: u32,
 }
 
 /// Builds price stats from injected ports; never constructs adapters.
@@ -64,20 +68,26 @@ impl PriceStats {
     }
 
     /// 30/90/365-day stats for every listing with an accepted match to
-    /// `asin` (no listings when there is none).
+    /// `asin` (no listings when there is none). Listings from a membership
+    /// store not in `memberships` are removed and counted in
+    /// [`ProductPriceStats::hidden_listings`].
     ///
     /// # Errors
     /// [`PriceStatsError::Storage`] if matches or history cannot be read.
-    pub async fn for_product(&self, asin: &Asin) -> Result<ProductPriceStats, PriceStatsError> {
+    pub async fn for_product(
+        &self,
+        asin: &Asin,
+        memberships: Memberships,
+    ) -> Result<ProductPriceStats, PriceStatsError> {
         let now = self.clock.now();
         let longest = STATS_WINDOWS.iter().copied().max().unwrap_or(0);
         let since = UnixMillis(now.0.saturating_sub(i64::from(longest) * DAY_MS));
-        let mut listings = self
+        let listings = self
             .matches
             .accepted_listings(asin)
             .await
             .map_err(|_| PriceStatsError::Storage)?;
-        listings.sort();
+        let (listings, hidden_listings) = visible_listings(listings, memberships);
         let mut out = Vec::with_capacity(listings.len());
         for (retailer, retailer_sku) in listings {
             let samples: Vec<PriceSample> = self
@@ -106,8 +116,23 @@ impl PriceStats {
             asin: asin.clone(),
             as_of: now,
             listings: out,
+            hidden_listings,
         })
     }
+}
+
+/// Sorts `listings` and drops those from a membership store the reader
+/// lacks (ADR 0012, as in search results); returns them with the number
+/// dropped.
+pub(crate) fn visible_listings(
+    mut listings: Vec<(RetailerId, RetailerSku)>,
+    memberships: Memberships,
+) -> (Vec<(RetailerId, RetailerSku)>, u32) {
+    listings.sort();
+    let before = listings.len();
+    listings.retain(|(retailer, _)| memberships.allows(is_membership_retailer(retailer), retailer));
+    let hidden = u32::try_from(before - listings.len()).unwrap_or(u32::MAX);
+    (listings, hidden)
 }
 
 #[cfg(test)]
@@ -222,10 +247,11 @@ mod tests {
         // Unsorted on purpose: the use case sorts.
         let s = stats(FakePrices(Ok(history)), vec![walmart, liverpool]);
         let asin = Asin::new("B0CHHSFMRL").unwrap();
-        let out = s.for_product(&asin).await.unwrap();
+        let out = s.for_product(&asin, NONE).await.unwrap();
 
         assert_eq!(out.asin, asin);
         assert_eq!(out.as_of, UnixMillis(NOW));
+        assert_eq!(out.hidden_listings, 0);
         let names: Vec<&str> = out.listings.iter().map(|l| l.retailer.as_str()).collect();
         assert_eq!(names, ["liverpool", "walmart_mx"]);
 
@@ -249,11 +275,46 @@ mod tests {
         );
     }
 
+    const NONE: Memberships = Memberships {
+        costco: false,
+        sams: false,
+    };
+
+    #[tokio::test]
+    async fn membership_listings_are_hidden_unless_the_reader_has_it() {
+        let listings = vec![
+            key("sams_mx", "2"),
+            key("costco_mx", "1"),
+            key("walmart_mx", "3"),
+        ];
+        let s = stats(FakePrices(Ok(BTreeMap::new())), listings);
+        let asin = Asin::new("B0CHHSFMRL").unwrap();
+        let shown = |out: ProductPriceStats| {
+            let names: Vec<String> = out
+                .listings
+                .iter()
+                .map(|l| l.retailer.as_str().to_owned())
+                .collect();
+            (names, out.hidden_listings)
+        };
+        let none = s.for_product(&asin, NONE).await.unwrap();
+        assert_eq!(shown(none), (vec!["walmart_mx".to_owned()], 2));
+        let costco = Memberships {
+            costco: true,
+            sams: false,
+        };
+        let out = s.for_product(&asin, costco).await.unwrap();
+        assert_eq!(
+            shown(out),
+            (vec!["costco_mx".to_owned(), "walmart_mx".to_owned()], 1)
+        );
+    }
+
     #[tokio::test]
     async fn no_accepted_listing_gives_no_rows() {
         let s = stats(FakePrices(Ok(BTreeMap::new())), vec![]);
         let out = s
-            .for_product(&Asin::new("B0CHHSFMRL").unwrap())
+            .for_product(&Asin::new("B0CHHSFMRL").unwrap(), NONE)
             .await
             .unwrap();
         assert!(out.listings.is_empty());
@@ -266,7 +327,7 @@ mod tests {
             vec![key("walmart_mx", "1")],
         );
         assert_eq!(
-            s.for_product(&Asin::new("B0CHHSFMRL").unwrap()).await,
+            s.for_product(&Asin::new("B0CHHSFMRL").unwrap(), NONE).await,
             Err(PriceStatsError::Storage)
         );
     }

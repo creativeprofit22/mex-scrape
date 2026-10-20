@@ -10,9 +10,9 @@ It is a monorepo:
 - **`fathom_transcript.py`** — standalone Python helper, unrelated to the app.
 
 ```
-web (Next.js) ──HTTP/OpenAPI──▶ api ─┐
-                                     ├─▶ db ──▶ Postgres
-                    worker ──────────┘
+web (Next.js) ──HTTP/OpenAPI──▶ api ─┐                 (sessions, CSRF, rate limits; enqueues searches, reads results)
+                                     ├─▶ db ──▶ Postgres (tables + pgmq queues, ADR 0011)
+                    worker ──────────┘                 (worker consumes queues, runs schedules)
 api, worker ─▶ matching ─▶ domain
 worker ─▶ retailers ─▶ brightdata ─▶ http-guard ─▶ internet
 worker ──────────────▶ brightdata   (run store + recovery)
@@ -32,7 +32,8 @@ The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-arch
 │ ┌ infrastructure (adapters): db, retailers, amazon,                 ┐ │
 │ │                            http-guard, brightdata, secrets        │ │
 │ │ ┌ app: use cases + ports (OfferSource, AmazonSource,           ┐  │ │
-│ │ │      PriceHistoryRepo, MatchRepo, AccessCountsRepo, Clock)   │  │ │
+│ │ │      PriceHistoryRepo, MatchRepo, AccessCountsRepo, Clock,   │  │ │
+│ │ │      RequestBudget, SearchRepo, UserRepo, PasswordHasher)    │  │ │
 │ │ │ ┌ domain: entities and pure rules ┐                          │  │ │
 │ │ │ └─────────────────────────────────┘                          │  │ │
 │ │ └──────────────────────────────────────────────────────────────┘  │ │
@@ -41,10 +42,29 @@ The backend follows the Onion architecture ([ADR 0009](decisions/0009-onion-arch
 ```
 
 - **domain**: entities and pure rules.
-- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `db::price_history::PgPriceHistory`, `db::price_history::PgMatches`, `retailers::RetailerOfferSource`, `amazon::SpApiAmazonSource`, `amazon::BrightDataAmazonSource`).
+- **app**: use cases and the port traits they call. Adapters implement them (`db::access::PgAccessCounts`, `db::price_history::PgPriceHistory`, `db::price_history::PgMatches`, `db::searches::PgSearches`, `db::usage::PgRequestBudget`, `db::users::PgUsers`, `api::auth::hasher::Argon2Hasher`, `retailers::RetailerOfferSource`, `amazon::SpApiAmazonSource`, `amazon::BrightDataAmazonSource`).
 - **infrastructure**: adapters for Postgres, store pages, Amazon, outbound HTTP, Bright Data and secrets.
 - **entry points**: `api` and `worker` build adapters, inject them into use cases, and map results to HTTP or logs.
 - `brightdata` stays product-agnostic, outside the onion ([ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md)); `worker` bridges it.
+
+## Jobs, queues and schedules
+
+Slow and paid work runs as durable background jobs in the `worker` ([ADR 0011](decisions/0011-pgmq-jobs-schedules-caps.md); details and runbook in [worker.md](modules/worker.md)):
+
+- Queues are pgmq on the same Postgres (SQL vendored as a migration, called through `db::queue`; no Redis): `search_jobs` (searches enqueued by `POST /searches`, atomically with the `searches` row) and `refresh_jobs` (`product_refresh` and `category_browse`, enqueued by the schedules), each with a `_dlq` dead-letter queue. Reads use a visibility timeout; transient failures retry with backoff a bounded number of times, then dead-letter; refusals are never retried.
+- Schedules (UTC cron, `croner` with an injected clock): `REFRESH_CRON` refreshes tracked listings into `price_observations`; `CATEGORY_BROWSE_CRON` browses the configured category listings of stores without keyword search (Sears MX, Sanborns; [ADR 0008](decisions/0008-browser-api-settle-blocking-category-listings.md)) through the Browser API with a page cap.
+- Only the worker holding the Bright Data driver lock runs consumers and schedules, so ticks never double-fire.
+- Spending guards run before every paid call: Bright Data runs pass `brightdata::runs::check_gates` (kill switch, enabled, key, per-tenant daily caps, one active run); Amazon calls (SP-API and fallback) pass `app::GatedAmazonSource` (kill switch, per-tenant daily request cap). Tenants: `user-<id>` for each signed-in user's searches ([ADR 0012](decisions/0012-session-auth-csrf-rate-limits-i18n.md)), `system` for scheduled jobs.
+- Each job logs per-retailer metrics (`mex_scrape::metrics`: requests, parse success, `blocked_needs_kyc`, estimated cost).
+
+## Accounts, sessions and the web app
+
+[ADR 0012](decisions/0012-session-auth-csrf-rate-limits-i18n.md); details in [api.md](modules/api.md) and [web.md](modules/web.md):
+
+- Users sign up with e-mail and password (Argon2id). `api` keeps server-side sessions in Postgres (`sessions`); the browser holds only an `HttpOnly`, `SameSite=Lax`, `Secure` session-id cookie. Every non-GET user route needs the session's `X-CSRF-Token` and a same-origin request, else 403.
+- Each user is their own tenant (`user-<id>`, a generated column), so searches are isolated at the data layer. Results that need a store membership the user lacks (Costco, Sam's Club) are hidden.
+- User routes are rate limited per plan (signed in, by user id) or per client IP (signed out), with `tower_governor`; 429 carries `Retry-After`.
+- The web app serves `/es` (default) and `/en`. All UI text comes from two message catalogs that a lint step keeps in sync. Playwright tests with axe run against a database seeded by `db`'s `seed_e2e`.
 
 ## Module map
 
@@ -52,18 +72,18 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 
 | module | kind | purpose | doc |
 |---|---|---|---|
-| `api` | bin + lib | axum HTTP server; publishes the OpenAPI spec (utoipa) | [api.md](modules/api.md) |
-| `worker` | bin | background job runner (fetching, matching, price history) | [worker.md](modules/worker.md) |
+| `api` | bin + lib | axum HTTP server: accounts, cookie sessions, CSRF and per-plan rate limits ([ADR 0012](decisions/0012-session-auth-csrf-rate-limits-i18n.md)); publishes the OpenAPI spec (utoipa) | [api.md](modules/api.md) |
+| `worker` | bin + lib | background job runner: pgmq consumers, cron schedules, fetching, matching, ROI, price history ([ADR 0011](decisions/0011-pgmq-jobs-schedules-caps.md)) | [worker.md](modules/worker.md) |
 | `domain` | lib | pure types and business logic, no I/O | [domain.md](modules/domain.md) |
 | `app` | lib | application layer: use cases and ports, no I/O ([ADR 0009](decisions/0009-onion-architecture.md)) | [app.md](modules/app.md) |
-| `db` | lib + bin `migrate` | sqlx Postgres access and migrations | [db.md](modules/db.md) |
+| `db` | lib + bins `migrate`, `seed_e2e` | sqlx Postgres access, migrations, the pgmq job queues, users and sessions | [db.md](modules/db.md) |
 | `http-guard` | lib | hardened outbound HTTP and WebSocket ([ADR 0007](decisions/0007-brightdata-browser-api.md)) | [http-guard.md](modules/http-guard.md) |
 | `secrets` | lib | secret values and error redaction, no network code | [secrets.md](modules/secrets.md) |
 | `brightdata` | lib | product-agnostic Bright Data client (Web Unlocker + Datasets v3 + Browser API) with durable, capped runs ([ADR 0002](decisions/0002-brightdata-web-unlocker-fetch-layer.md), [ADR 0006](decisions/0006-brightdata-agnostic-client-durable-runs.md), [ADR 0007](decisions/0007-brightdata-browser-api.md), [ADR 0008](decisions/0008-browser-api-settle-blocking-category-listings.md)) | [brightdata.md](modules/brightdata.md) |
 | `retailers` | lib | Mexican store adapters: one `Retailer` per store parsing pages into `domain::Offer`, fixture sanitizer, parse-health alerts | [retailers.md](modules/retailers.md) |
 | `amazon` | lib | Amazon.com.mx data: SP-API client (LWA tokens, rate limits) plus the Bright Data Amazon-dataset fallback, both behind `app::ports::AmazonSource` ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md), [ADR 0010](decisions/0010-amazon-spapi-lwa-brightdata-dataset-fallback.md)) | [amazon.md](modules/amazon.md) |
 | `matching` | lib | product matching: retailer offer → Amazon ASIN (GTIN first, then brand + title confidence); ROI is in `domain` | [matching.md](modules/matching.md) |
-| `web` | Next.js app | Spanish UI; generated API client | [web.md](modules/web.md) |
+| `web` | Next.js app | Spanish-first UI with an English toggle (`/es`, `/en`), Playwright + axe e2e tests; generated API client | [web.md](modules/web.md) |
 
 ## Allowed dependencies
 

@@ -1,0 +1,113 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
+
+import { localeCookie, type Locale } from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { api } from "@/lib/api/client";
+import { errorMessage } from "@/lib/ui";
+
+const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+
+/** Sign-up or sign-in form; on success goes to onboarding or search. */
+export function AuthForm({
+  mode,
+  lang,
+  dict,
+  errors,
+}: {
+  mode: "signup" | "signin";
+  lang: Locale;
+  dict: Dictionary["auth"];
+  errors: Dictionary["common"]["errors"];
+}) {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const { data, error: failure, response } =
+      mode === "signup"
+        ? await api.POST("/auth/signup", {
+            body: { email, password, locale: lang },
+          })
+        : await api.POST("/auth/signin", { body: { email, password } });
+    if (data) {
+      const locale = data.user.locale === "en" ? "en" : "es";
+      document.cookie = `${localeCookie}=${locale}; path=/; max-age=${ONE_YEAR_SECONDS}; samesite=lax`;
+      const next = data.user.onboarded ? "search" : "onboarding";
+      router.push(`/${locale}/${next}`);
+      return;
+    }
+    setPending(false);
+    setError(
+      errorMessage(response.status, failure?.error, errors, {
+        invalid_email: dict.errors.invalidEmail,
+        weak_password: dict.errors.weakPassword,
+        email_taken: dict.errors.emailTaken,
+        invalid_credentials: dict.errors.invalidCredentials,
+      }),
+    );
+  }
+
+  const signup = mode === "signup";
+  return (
+    <>
+      <h1>{signup ? dict.signUpHeading : dict.signInHeading}</h1>
+      <form className="stack" onSubmit={submit} noValidate>
+        <label>
+          {dict.email}
+          <input
+            type="email"
+            name="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <label>
+          {dict.password}
+          <input
+            type="password"
+            name="password"
+            autoComplete={signup ? "new-password" : "current-password"}
+            required
+            minLength={signup ? 8 : undefined}
+            maxLength={128}
+            aria-describedby={signup ? "password-hint" : undefined}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+        {signup ? (
+          <p id="password-hint" className="hint">
+            {dict.passwordHint}
+          </p>
+        ) : null}
+        <p role="alert" className="error">
+          {error}
+        </p>
+        <button type="submit" disabled={pending}>
+          {pending
+            ? dict.submitting
+            : signup
+              ? dict.signUpSubmit
+              : dict.signInSubmit}
+        </button>
+      </form>
+      <p>
+        <Link href={`/${lang}/${signup ? "signin" : "signup"}`}>
+          {signup ? dict.haveAccount : dict.noAccount}
+        </Link>
+      </p>
+    </>
+  );
+}

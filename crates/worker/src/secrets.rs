@@ -17,7 +17,7 @@ const SECRET_VARS: [&str; 7] = [
 
 /// Provider credentials. Each is optional so the worker starts in
 /// development; an adapter requires its own secrets when it is built.
-pub(crate) struct ServerSecrets {
+pub struct ServerSecrets {
     brightdata_api_key: Option<Secret>,
     brightdata_unlocker_zone: Option<Secret>,
     brightdata_browser_zone: Option<Secret>,
@@ -29,15 +29,13 @@ pub(crate) struct ServerSecrets {
 
 impl ServerSecrets {
     /// Loads every secret from the process environment.
-    pub(crate) fn from_env() -> Result<Self, SecretError> {
+    pub fn from_env() -> Result<Self, SecretError> {
         Self::from_lookup(|name| std::env::var_os(name))
     }
 
     /// Loads every secret through `lookup`. Absent is `None`; a present but
     /// empty, malformed or non-UTF-8 value is an error naming the variable.
-    pub(crate) fn from_lookup(
-        lookup: impl Fn(&str) -> Option<OsString>,
-    ) -> Result<Self, SecretError> {
+    pub fn from_lookup(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Self, SecretError> {
         let [
             brightdata_api_key,
             brightdata_unlocker_zone,
@@ -74,7 +72,7 @@ impl ServerSecrets {
 
     /// `BRIGHTDATA_API_KEY`, `BRIGHTDATA_UNLOCKER_ZONE` and the optional
     /// `BRIGHTDATA_BROWSER_ZONE`, for the client config.
-    pub(crate) fn brightdata(&self) -> (Option<Secret>, Option<Secret>, Option<Secret>) {
+    pub fn brightdata(&self) -> (Option<Secret>, Option<Secret>, Option<Secret>) {
         (
             self.brightdata_api_key.clone(),
             self.brightdata_unlocker_zone.clone(),
@@ -84,7 +82,7 @@ impl ServerSecrets {
 
     /// `SPAPI_LWA_CLIENT_ID`, `SPAPI_LWA_CLIENT_SECRET` and
     /// `SPAPI_REFRESH_TOKEN`, for `amazon::SpApiConfig::from_secrets`.
-    pub(crate) fn spapi(&self) -> (Option<Secret>, Option<Secret>, Option<Secret>) {
+    pub fn spapi(&self) -> (Option<Secret>, Option<Secret>, Option<Secret>) {
         (
             self.spapi_lwa_client_id.clone(),
             self.spapi_lwa_client_secret.clone(),
@@ -93,14 +91,23 @@ impl ServerSecrets {
     }
 
     /// Which variables are set, in fixed order; safe to log.
-    pub(crate) fn presence(&self) -> [(&'static str, bool); 7] {
+    pub fn presence(&self) -> [(&'static str, bool); 7] {
         self.entries()
             .map(|(name, secret)| (name, secret.is_some()))
     }
 
     /// A redactor covering every loaded value.
-    pub(crate) fn redactor(&self) -> Redactor {
+    pub fn redactor(&self) -> Redactor {
         Redactor::new(self.entries().into_iter().filter_map(|(_, secret)| secret))
+    }
+
+    /// `base` (e.g. the database URL redactor) extended with every loaded
+    /// value, for errors that may mention either.
+    pub fn redactor_extending(&self, base: &Redactor) -> Redactor {
+        self.entries()
+            .into_iter()
+            .filter_map(|(_, secret)| secret)
+            .fold(base.clone(), |r, secret| r.with(secret))
     }
 }
 

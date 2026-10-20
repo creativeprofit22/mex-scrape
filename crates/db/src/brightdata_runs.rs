@@ -408,6 +408,27 @@ pub async fn insert_access_event(
     Ok(())
 }
 
+/// `(host, outcome)` of every access event of one run, in insertion
+/// order.
+///
+/// # Errors
+///
+/// Database errors; redact before logging.
+pub async fn access_outcomes_for_run(
+    pool: &PgPool,
+    run_id: i64,
+) -> Result<Vec<(String, String)>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT host, outcome FROM brightdata_access_events WHERE run_id = $1 ORDER BY id",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await?;
+    rows.iter()
+        .map(|row| Ok((row.try_get("host")?, row.try_get("outcome")?)))
+        .collect()
+}
+
 /// Outcome counts per host, sorted by host.
 ///
 /// # Errors

@@ -1,0 +1,183 @@
+{
+  "meta": {
+    "title": "mex-scrape",
+    "description": "Compara precios de tiendas mexicanas con Amazon.com.mx y calcula tu ROI."
+  },
+  "nav": {
+    "label": "Navegación principal",
+    "home": "Inicio",
+    "search": "Buscar",
+    "calculator": "Calculadora",
+    "signIn": "Iniciar sesión",
+    "signUp": "Crear cuenta",
+    "signOut": "Cerrar sesión",
+    "skipToContent": "Saltar al contenido",
+    "switchLanguage": "English",
+    "switchLanguageLabel": "Cambiar el idioma a inglés"
+  },
+  "common": {
+    "loading": "Cargando…",
+    "none": "—",
+    "errors": {
+      "generic": "Algo salió mal. Inténtalo de nuevo.",
+      "rateLimited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+      "unavailable": "El servicio no está disponible en este momento.",
+      "csrf": "Tu sesión cambió. Recarga la página e inténtalo de nuevo."
+    }
+  },
+  "health": {
+    "checking": "Comprobando API…",
+    "online": "API en línea",
+    "offline": "API no disponible"
+  },
+  "home": {
+    "heading": "mex-scrape",
+    "intro": "Compara precios de tiendas mexicanas con Amazon.com.mx, calcula tu ROI y consulta el historial de precios.",
+    "start": "Empezar a buscar",
+    "createAccount": "Crear una cuenta"
+  },
+  "auth": {
+    "signUpHeading": "Crear cuenta",
+    "signInHeading": "Iniciar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "passwordHint": "Entre 8 y 128 caracteres.",
+    "signUpSubmit": "Crear cuenta",
+    "signInSubmit": "Entrar",
+    "submitting": "Enviando…",
+    "haveAccount": "¿Ya tienes cuenta? Inicia sesión",
+    "noAccount": "¿No tienes cuenta? Crea una",
+    "errors": {
+      "invalidEmail": "Escribe un correo electrónico válido.",
+      "weakPassword": "La contraseña debe tener entre 8 y 128 caracteres.",
+      "emailTaken": "Ya existe una cuenta con ese correo.",
+      "invalidCredentials": "Correo o contraseña incorrectos."
+    }
+  },
+  "onboarding": {
+    "heading": "Tus membresías",
+    "intro": "Algunas tiendas solo venden a sus socios. Marca las membresías que tienes y ocultaremos las ofertas que no puedes comprar.",
+    "legend": "Membresías",
+    "costco": "Costco",
+    "sams": "Sam's Club",
+    "submit": "Guardar y continuar",
+    "saving": "Guardando…"
+  },
+  "search": {
+    "heading": "Buscar productos",
+    "label": "Producto a buscar",
+    "placeholder": "Ej. taladro inalámbrico",
+    "submit": "Buscar",
+    "costsLegend": "Tus costos por unidad",
+    "prep": "Preparación (MXN)",
+    "shipping": "Envío a Amazon (MXN)",
+    "status": {
+      "queued": "En cola…",
+      "running": "Buscando en las tiendas…",
+      "done": "Búsqueda terminada.",
+      "partial": "Búsqueda terminada con resultados parciales.",
+      "failed": "La búsqueda falló.",
+      "refused": "La búsqueda fue rechazada.",
+      "timeout": "La búsqueda está tardando demasiado. Vuelve a intentarlo más tarde."
+    },
+    "resultsHeading": "Resultados para «{query}»",
+    "noResults": "No se encontraron ofertas.",
+    "hidden": "{count} resultados ocultos porque requieren una membresía que no tienes.",
+    "columns": {
+      "product": "Producto",
+      "price": "Precio",
+      "availability": "Disponibilidad",
+      "amazon": "Amazon",
+      "profit": "Ganancia estimada",
+      "roi": "ROI"
+    },
+    "roiFailed": "No se pudieron calcular la ganancia y el ROI. {reason}",
+    "roiError": {
+      "zero_units": "Sin unidades para repartir costos",
+      "overflow": "Montos demasiado grandes"
+    },
+    "availability": {
+      "in_stock": "Disponible",
+      "out_of_stock": "Agotado",
+      "unknown": "Desconocida"
+    },
+    "match": {
+      "accepted": "Coincidencia",
+      "needsReview": "Revisar coincidencia",
+      "none": "Sin coincidencia",
+      "history": "Historial de {asin}"
+    },
+    "membership": "Requiere membresía",
+    "storeLink": "Ver en la tienda (se abre en otra pestaña)",
+    "outcomesHeading": "Tiendas consultadas",
+    "offers": "{count} ofertas",
+    "outcomeLine": "{retailer}: {outcome} · {offers}",
+    "outcomes": {
+      "ok": "Consultada",
+      "category_only": "Solo por categorías",
+      "blocked_needs_kyc": "Bloqueada (requiere verificación)",
+      "skipped_robots": "Omitida (robots.txt)",
+      "failed": "Falló",
+      "no_offers": "Sin ofertas"
+    }
+  },
+  "product": {
+    "heading": "Historial de precios de {asin}",
+    "chartHeading": "Precio más bajo por día",
+    "chartLabel": "Gráfica del precio más bajo por día de cada tienda entre {from} y {to}, de {min} a {max}.",
+    "tableToggle": "Ver los datos en una tabla",
+    "tableCaption": "Precios diarios en {retailer} ({sku})",
+    "day": "Día",
+    "low": "Mínimo",
+    "high": "Máximo",
+    "average": "Promedio",
+    "inStock": "En existencia",
+    "yes": "Sí",
+    "no": "No",
+    "statsHeading": "Resumen de precios",
+    "statsCaption": "Mínimo, máximo y promedio en {retailer} ({sku})",
+    "window": "Periodo",
+    "windowDays": "{days} días",
+    "observations": "Observaciones",
+    "empty": "Aún no hay historial para este producto.",
+    "notFound": "No encontramos ese producto.",
+    "hidden": "{count} productos de tiendas ocultos porque requieren una membresía que no tienes."
+  },
+  "calculator": {
+    "heading": "Calculadora de costos",
+    "intro": "Calcula la ganancia y el ROI de un producto con los mismos cálculos que la búsqueda.",
+    "sellPrice": "Precio de venta en Amazon (MXN)",
+    "buyPrice": "Precio de compra en la tienda (MXN)",
+    "fees": "Comisiones de Amazon (MXN)",
+    "prep": "Preparación por unidad (MXN)",
+    "shipping": "Envío por unidad (MXN)",
+    "monthlyFixed": "Costos fijos mensuales (MXN)",
+    "unitsPerMonth": "Unidades vendidas al mes",
+    "submit": "Calcular",
+    "resultHeading": "Resultado",
+    "profit": "Ganancia por unidad",
+    "roi": "ROI",
+    "margin": "Margen",
+    "totalCost": "Costo total por unidad",
+    "fixedPerUnit": "Costos fijos por unidad",
+    "errors": {
+      "invalidAmount": "Revisa los montos: deben ser números positivos.",
+      "zero_units": "Indica las unidades al mes para repartir los costos fijos.",
+      "overflow": "Los montos son demasiado grandes."
+    }
+  },
+  "retailers": {
+    "bodega_aurrera": "Bodega Aurrera",
+    "chedraui": "Chedraui",
+    "costco_mx": "Costco",
+    "heb_mx": "H-E-B",
+    "liverpool": "Liverpool",
+    "mercadolibre": "Mercado Libre",
+    "palacio_de_hierro": "El Palacio de Hierro",
+    "sams_mx": "Sam's Club",
+    "sanborns": "Sanborns",
+    "sears_mx": "Sears",
+    "waldos": "Waldo's",
+    "walmart_mx": "Walmart"
+  }
+}
