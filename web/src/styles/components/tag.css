@@ -1,0 +1,24 @@
+/* Tags: outlined, no fill. The text is the meaning; colour only reinforces it. */
+
+.tag {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-1);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-tag);
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  line-height: 1.6;
+  text-transform: uppercase;
+  vertical-align: 0.1em;
+}
+
+.tag-gain {
+  color: var(--gain);
+}
+
+.tag-warn {
+  color: var(--warn);
+}

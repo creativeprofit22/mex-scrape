@@ -1,0 +1,70 @@
+/* Ruled tables, definition lists and outcome lists. */
+
+.table-wrap {
+  overflow-x: auto;
+  margin-bottom: var(--space-6);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-table);
+}
+
+caption {
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+th,
+td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+thead th {
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  vertical-align: bottom;
+}
+
+tbody th {
+  font-weight: 400;
+}
+
+tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.retailer {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: var(--space-1) var(--space-4);
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.outcomes {
+  padding-left: var(--space-5);
+}

@@ -1,0 +1,132 @@
+/*
+ * Buttons: primary (push-button), secondary, link.
+ * Primary press model: conformed variant of the kinetics push-button
+ * (library/conformed/kinetics/push-button.css) — 2px edge, 1px travel,
+ * tokenised timing, reduced-motion rule. see sources#push-button
+ */
+
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Primary: every plain <button> and .button links */
+button:not(.secondary, .link-button),
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control);
+  padding: 0 var(--space-5);
+  /* Transparent border becomes the visible outline in forced colours */
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  box-shadow: 0 2px 0 var(--accent-edge);
+  transition:
+    transform var(--press-duration) var(--press-ease),
+    box-shadow var(--press-duration) var(--press-ease),
+    background-color var(--press-duration) var(--press-ease);
+}
+
+button:not(.secondary, .link-button):active:not(:disabled),
+.button:active {
+  transform: translateY(1px);
+  background: var(--accent-press);
+  box-shadow: 0 1px 0 var(--accent-edge);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:not(.secondary, .link-button):hover:not(:disabled, :active),
+  .button:hover:not(:active) {
+    background: var(--accent-hover);
+  }
+}
+
+/* Secondary: a sheet with a control border */
+button.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control);
+  padding: 0 var(--space-5);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.2;
+  transition: background-color var(--press-duration) var(--press-ease);
+}
+
+button.secondary:active:not(:disabled) {
+  background: var(--sheet-press);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.secondary:hover:not(:disabled, :active) {
+    background: var(--sheet-hover);
+  }
+}
+
+/* Link button: an action that reads as a link */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link-button:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+.site-header .link-button {
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-header .link-button:hover {
+    text-decoration: underline;
+  }
+}
+
+@media (pointer: coarse) {
+  .link-button {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control);
+  }
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Reduced motion: keep the colour change, drop the travel */
+@media (prefers-reduced-motion: reduce) {
+  button:not(.secondary, .link-button),
+  .button,
+  button.secondary {
+    transition: none;
+  }
+
+  button:not(.secondary, .link-button):active:not(:disabled),
+  .button:active {
+    transform: none;
+    box-shadow: 0 2px 0 var(--accent-edge);
+  }
+}

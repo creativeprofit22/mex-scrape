@@ -162,17 +162,19 @@ export function AssistantChat({
 
       <form className="stack" onSubmit={send}>
         <label htmlFor={inputId}>{dict.label}</label>
-        <textarea
-          id={inputId}
-          name="message"
-          rows={3}
-          required
-          maxLength={MAX_MESSAGE_CHARS}
-          placeholder={dict.placeholder}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
+        <span className="field">
+          <textarea
+            id={inputId}
+            name="message"
+            rows={3}
+            required
+            maxLength={MAX_MESSAGE_CHARS}
+            placeholder={dict.placeholder}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+          />
+        </span>
         <div className="actions">
           <button type="submit" disabled={pending || draft.trim() === ""}>
             {dict.send}
@@ -203,7 +205,7 @@ export function AssistantChat({
                     })}
                   </p>
                   <p>
-                    <span className={s.decision === "accept" ? "badge ok" : "badge warn"}>
+                    <span className={s.decision === "accept" ? "tag tag-gain" : "tag tag-warn"}>
                       {s.decision === "accept" ? dict.proposeAccept : dict.proposeReject}
                     </span>{" "}
                     {interpolate(dict.reason, { reason: s.reason })}

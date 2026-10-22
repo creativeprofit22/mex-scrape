@@ -1,0 +1,41 @@
+/* Price-history chart frame, legend and the data-table disclosure.
+   Series colours still live in PriceHistory.tsx until phase 4. */
+
+.chart {
+  margin: 0 0 var(--space-4);
+}
+
+.chart svg[role="img"] {
+  display: block;
+  height: 15rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-table);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+details {
+  margin: var(--space-4) 0;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+@media (pointer: coarse) {
+  summary {
+    padding-block: var(--space-3);
+  }
+}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Archivo } from "next/font/google";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -9,6 +10,15 @@ import { hasLocale, locales } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";
 
 import "../globals.css";
+
+// Single family; the wdth axis carries the condensed display role.
+// see sources#archivo
+const archivo = Archivo({
+  subsets: ["latin"],
+  axes: ["wdth"],
+  variable: "--font-archivo",
+  display: "swap",
+});
 
 export function generateStaticParams() {
   return locales.map((lang) => ({ lang }));
@@ -33,7 +43,7 @@ export default async function RootLayout({
   const other = lang === "es" ? "en" : "es";
 
   return (
-    <html lang={lang}>
+    <html lang={lang} className={archivo.variable}>
       <body>
         <a className="skip-link" href="#main">
           {dict.nav.skipToContent}

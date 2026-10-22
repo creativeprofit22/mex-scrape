@@ -2,7 +2,13 @@
 
 ## Purpose
 
-Next.js 16 (App Router, TypeScript) front end in `web/`. Spanish by default, English on request ([ADR 0012](../decisions/0012-session-auth-csrf-rate-limits-i18n.md)). Talks to the backend only through the typed client generated from the `api` OpenAPI spec.
+Next.js 16 (App Router, TypeScript) front end in `web/`. Spanish by default, English on request ([ADR 0012](../decisions/0012-session-auth-csrf-rate-limits-i18n.md)). Talks to the backend only through the typed client generated from the `api` OpenAPI spec. Styling is plain layered CSS with one token set and Archivo ([ADR 0014](../decisions/0014-web-design-system-and-app-shell.md)).
+
+## Sub-docs
+
+| Doc | Covers |
+| --- | --- |
+| [design-system](web/design-system.md) | tokens (light and dark), type roles, components and classes, CSS file ownership and layer order, adding a component stylesheet |
 
 ## Public API
 
@@ -44,6 +50,7 @@ Every page lives under `src/app/[lang]/` (`lang` is `es` or `en`):
 ## Dependencies
 
 - Backend: `api` over HTTP only.
+- Font: Archivo via `next/font/google` (downloaded at build time).
 - npm: `next`, `react`, `openapi-fetch`; dev: `openapi-typescript`, `eslint`, `typescript`, `@playwright/test` (1.64.1), `@axe-core/playwright` (4.14.0). All pinned in `package-lock.json`.
 
 ## Owned tables

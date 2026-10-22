@@ -1,0 +1,26 @@
+/* Inline errors, hints and the failed-load panel. */
+
+.error {
+  color: var(--loss);
+}
+
+.error:empty {
+  display: none;
+}
+
+.hint {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-table);
+}
+
+.load-error {
+  padding: var(--space-4);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.load-error .error {
+  margin: 0;
+}

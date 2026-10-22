@@ -71,28 +71,32 @@ export function AuthForm({
       <form className="stack" onSubmit={submit} noValidate>
         <label>
           {dict.email}
-          <input
-            type="email"
-            name="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <span className="field">
+            <input
+              type="email"
+              name="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </span>
         </label>
         <label>
           {dict.password}
-          <input
-            type="password"
-            name="password"
-            autoComplete={signup ? "new-password" : "current-password"}
-            required
-            minLength={signup ? 8 : undefined}
-            maxLength={128}
-            aria-describedby={signup ? "password-hint" : undefined}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <span className="field">
+            <input
+              type="password"
+              name="password"
+              autoComplete={signup ? "new-password" : "current-password"}
+              required
+              minLength={signup ? 8 : undefined}
+              maxLength={128}
+              aria-describedby={signup ? "password-hint" : undefined}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </span>
         </label>
         {signup ? (
           <p id="password-hint" className="hint">

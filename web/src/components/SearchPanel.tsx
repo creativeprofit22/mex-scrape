@@ -199,37 +199,43 @@ export function SearchPanel({
       <form className="stack" onSubmit={submit} role="search">
         <label>
           {dict.label}
-          <input
-            type="search"
-            name="query"
-            required
-            maxLength={100}
-            placeholder={dict.placeholder}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <span className="field">
+            <input
+              type="search"
+              name="query"
+              required
+              maxLength={100}
+              placeholder={dict.placeholder}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </span>
         </label>
         <fieldset>
           <legend>{dict.costsLegend}</legend>
           <label>
             {dict.prep}
-            <input
-              name="prep"
-              inputMode="decimal"
-              aria-invalid={pesosToCentavos(prep, true) === null}
-              value={prep}
-              onChange={(e) => setPrep(e.target.value)}
-            />
+            <span className="field">
+              <input
+                name="prep"
+                inputMode="decimal"
+                aria-invalid={pesosToCentavos(prep, true) === null}
+                value={prep}
+                onChange={(e) => setPrep(e.target.value)}
+              />
+            </span>
           </label>
           <label>
             {dict.shipping}
-            <input
-              name="shipping"
-              inputMode="decimal"
-              aria-invalid={pesosToCentavos(shipping, true) === null}
-              value={shipping}
-              onChange={(e) => setShipping(e.target.value)}
-            />
+            <span className="field">
+              <input
+                name="shipping"
+                inputMode="decimal"
+                aria-invalid={pesosToCentavos(shipping, true) === null}
+                value={shipping}
+                onChange={(e) => setShipping(e.target.value)}
+              />
+            </span>
           </label>
         </fieldset>
         <button type="submit" disabled={pending || query.trim() === ""}>
@@ -290,7 +296,7 @@ export function SearchPanel({
                             {result.title}
                           </a>
                           {result.membership_required ? (
-                            <span className="badge">{dict.membership}</span>
+                            <span className="tag">{dict.membership}</span>
                           ) : null}
                         </th>
                         <td>{money(result.price_centavos)}</td>
@@ -305,8 +311,8 @@ export function SearchPanel({
                               <span
                                 className={
                                   amazon.match_status === "accepted"
-                                    ? "badge ok"
-                                    : "badge warn"
+                                    ? "tag tag-gain"
+                                    : "tag tag-warn"
                                 }
                               >
                                 {amazon.match_status === "accepted"

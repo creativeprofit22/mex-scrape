@@ -63,12 +63,13 @@ Slow and paid work runs as durable background jobs in the `worker` ([ADR 0011](d
 
 ## Accounts, sessions and the web app
 
-[ADR 0012](decisions/0012-session-auth-csrf-rate-limits-i18n.md); details in [api.md](modules/api.md) and [web.md](modules/web.md):
+[ADR 0012](decisions/0012-session-auth-csrf-rate-limits-i18n.md), [ADR 0014](decisions/0014-web-design-system-and-app-shell.md); details in [api.md](modules/api.md), [web.md](modules/web.md) and [design-system.md](modules/web/design-system.md):
 
 - Users sign up with e-mail and password (Argon2id). `api` keeps server-side sessions in Postgres (`sessions`); the browser holds only an `HttpOnly`, `SameSite=Lax`, `Secure` session-id cookie. Every non-GET user route needs the session's `X-CSRF-Token` and a same-origin request, else 403.
 - Each user is their own tenant (`user-<id>`, a generated column), so searches are isolated at the data layer. Results that need a store membership the user lacks (Costco, Sam's Club) are hidden.
 - User routes are rate limited per plan (signed in, by user id) or per client IP (signed out), with `tower_governor`; 429 carries `Retry-After`.
 - The web app serves `/es` (default) and `/en`. All UI text comes from two message catalogs that a lint step keeps in sync. Playwright tests with axe run against a database seeded by `db`'s `seed_e2e`.
+- The UI is an app shell built on one token set (light and dark), Archivo as the only font and native elements styled by layered CSS (`web/src/styles/`, no UI kit); contrast is AA in both schemes.
 
 ## AI assistant
 
@@ -96,7 +97,7 @@ Each module has a page in [`docs/modules/`](modules/) describing its purpose, pu
 | `amazon` | lib | Amazon.com.mx data: SP-API client (LWA tokens, rate limits) plus the Bright Data Amazon-dataset fallback, both behind `app::ports::AmazonSource` ([ADR 0003](decisions/0003-amazon-sp-api-primary-brightdata-fallback.md), [ADR 0010](decisions/0010-amazon-spapi-lwa-brightdata-dataset-fallback.md)) | [amazon.md](modules/amazon.md) |
 | `matching` | lib | product matching: retailer offer → Amazon ASIN (GTIN first, then brand + title confidence); ROI is in `domain` | [matching.md](modules/matching.md) |
 | `agent` | Node 22 service (`services/agent`) | headless gg-agent sidecar: assistant chat, zod tools that only call the `api` ([ADR 0004](decisions/0004-gg-agent-sidecar-for-ai.md), [ADR 0013](decisions/0013-assistant-sidecar-interface.md)) | [agent.md](modules/agent.md) |
-| `web` | Next.js app | Spanish-first UI with an English toggle (`/es`, `/en`), Playwright + axe e2e tests; generated API client | [web.md](modules/web.md) |
+| `web` | Next.js app | Spanish-first UI with an English toggle (`/es`, `/en`), Playwright + axe e2e tests; generated API client; layered CSS design system ([ADR 0014](decisions/0014-web-design-system-and-app-shell.md)) | [web.md](modules/web.md) |
 
 ## Allowed dependencies
 
