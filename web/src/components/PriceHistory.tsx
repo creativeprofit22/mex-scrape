@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { LoadError } from "@/components/LoadError";
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { formatDay, formatMoney, interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
-import { errorMessage, retailerName, signInPath } from "@/lib/ui";
+import { currentPath, errorMessage, retailerName, signInPath } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
 
 const DAYS = 365;
@@ -43,7 +45,9 @@ export function PriceHistory({
   const router = useRouter();
   const gate = useRequireOnboarded(lang, common.errors);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // `final` errors (unknown product) get a way back instead of a retry.
+  const [error, setError] = useState<{ message: string; final: boolean } | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -55,7 +59,7 @@ export function PriceHistory({
     ]).then(([history, stats]) => {
       if (!active) return;
       if (history.response.status === 401 || stats.response.status === 401) {
-        router.replace(signInPath(lang));
+        router.replace(signInPath(lang, currentPath()));
         return;
       }
       if (history.data && stats.data) {
@@ -63,26 +67,26 @@ export function PriceHistory({
         return;
       }
       const failed = history.data ? stats : history;
+      const notFound = failed.response.status === 404 || failed.error?.error === "invalid_asin";
       setError(
-        failed.response.status === 404 || failed.error?.error === "invalid_asin"
-          ? dict.notFound
-          : errorMessage(failed.response.status, failed.error?.error, common.errors),
+        notFound
+          ? { message: dict.notFound, final: true }
+          : {
+              message: errorMessage(failed.response.status, failed.error?.error, common.errors),
+              final: false,
+            },
       );
     });
     return () => {
       active = false;
     };
-  }, [asin, lang, router, dict.notFound, common.errors]);
+  }, [asin, lang, router, dict.notFound, common.errors, attempt]);
 
   const money = (v: number | null | undefined) =>
     v === null || v === undefined ? common.none : formatMoney(v, lang);
 
   if (gate.status === "error") {
-    return (
-      <p role="alert" className="error">
-        {gate.message}
-      </p>
-    );
+    return <LoadError message={gate.message} retryLabel={common.retry} onRetry={gate.retry} />;
   }
   if (gate.status === "loading") {
     return <p role="status">{common.loading}</p>;
@@ -95,10 +99,24 @@ export function PriceHistory({
           {interpolate(dict.hidden, { count: loaded.history.hidden_listings })}
         </p>
       ) : null}
-      {error ? (
-        <p role="alert" className="error">
-          {error}
-        </p>
+      {error?.final ? (
+        <>
+          <p role="alert" className="error">
+            {error.message}
+          </p>
+          <p>
+            <Link href={`/${lang}/search`}>{dict.backToSearch}</Link>
+          </p>
+        </>
+      ) : error ? (
+        <LoadError
+          message={error.message}
+          retryLabel={common.retry}
+          onRetry={() => {
+            setError(null);
+            setAttempt((n) => n + 1);
+          }}
+        />
       ) : !loaded ? (
         <p role="status">{common.loading}</p>
       ) : loaded.history.listings.every((l) => l.points.length === 0) ? (

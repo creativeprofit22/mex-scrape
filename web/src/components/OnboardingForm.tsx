@@ -5,10 +5,14 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
+import { LoadError } from "@/components/LoadError";
 import { api } from "@/lib/api/client";
-import { errorMessage, signInPath } from "@/lib/ui";
+import { currentPath, errorMessage, nextFromLocation, signInPath } from "@/lib/ui";
 
-/** Store memberships (Costco, Sam's Club); offers needing others are hidden. */
+/**
+ * Store memberships (Costco, Sam's Club); offers needing others are hidden.
+ * Saving goes on to `?next=` (the page that sent the user here) or search.
+ */
 export function OnboardingForm({
   lang,
   dict,
@@ -20,6 +24,10 @@ export function OnboardingForm({
 }) {
   const router = useRouter();
   const [loaded, setLoaded] = useState(false);
+  // A failed load must not show the form: saving its unticked boxes would
+  // overwrite memberships the user already has.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [costco, setCostco] = useState(false);
   const [sams, setSams] = useState(false);
   const [pending, setPending] = useState(false);
@@ -27,22 +35,24 @@ export function OnboardingForm({
 
   useEffect(() => {
     let active = true;
-    void api.GET("/me").then(({ data, response }) => {
+    void api.GET("/me").then(({ data, error: failure, response }) => {
       if (!active) return;
       if (response.status === 401) {
-        router.replace(signInPath(lang));
+        router.replace(signInPath(lang, currentPath()));
         return;
       }
-      if (data) {
-        setCostco(data.has_costco);
-        setSams(data.has_sams);
+      if (!data) {
+        setLoadError(errorMessage(response.status, failure?.error, common.errors));
+        return;
       }
+      setCostco(data.has_costco);
+      setSams(data.has_sams);
       setLoaded(true);
     });
     return () => {
       active = false;
     };
-  }, [lang, router]);
+  }, [lang, router, common.errors, attempt]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,17 +62,29 @@ export function OnboardingForm({
       body: { has_costco: costco, has_sams: sams },
     });
     if (data) {
-      router.push(`/${lang}/search`);
+      router.push(nextFromLocation() ?? `/${lang}/search`);
       return;
     }
     if (response.status === 401) {
-      router.replace(signInPath(lang));
+      router.replace(signInPath(lang, currentPath()));
       return;
     }
     setPending(false);
     setError(errorMessage(response.status, failure?.error, common.errors));
   }
 
+  if (loadError) {
+    return (
+      <LoadError
+        message={loadError}
+        retryLabel={common.retry}
+        onRetry={() => {
+          setLoadError(null);
+          setAttempt((n) => n + 1);
+        }}
+      />
+    );
+  }
   if (!loaded) {
     return <p role="status">{common.loading}</p>;
   }

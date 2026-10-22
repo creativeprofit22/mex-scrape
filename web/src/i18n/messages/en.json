@@ -19,11 +19,13 @@
   "common": {
     "loading": "Loading…",
     "none": "—",
+    "retry": "Try again",
     "errors": {
       "generic": "Something went wrong. Please try again.",
       "rateLimited": "Too many requests. Wait a moment and try again.",
       "unavailable": "The service is not available right now.",
-      "csrf": "Your session changed. Reload the page and try again."
+      "csrf": "Your session changed. Reload the page and try again.",
+      "network": "Can't reach the server. Check your connection and try again."
     }
   },
   "health": {
@@ -142,6 +144,7 @@
     "observations": "Observations",
     "empty": "No price history for this product yet.",
     "notFound": "We could not find that product.",
+    "backToSearch": "Back to search",
     "hidden": "{count} store listings hidden because they need a membership you do not hold."
   },
   "calculator": {

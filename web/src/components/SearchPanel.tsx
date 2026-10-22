@@ -8,7 +8,8 @@ import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { formatBasisPoints, formatMoney, interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
-import { errorMessage, pesosToCentavos, retailerName, signInPath } from "@/lib/ui";
+import { LoadError } from "@/components/LoadError";
+import { currentPath, errorMessage, pesosToCentavos, retailerName, signInPath } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
 
 /** Delay between `GET /searches/{id}` polls. */
@@ -61,7 +62,7 @@ export function SearchPanel({
 
   function unauthorized(status: number): boolean {
     if (status !== 401) return false;
-    router.replace(signInPath(lang));
+    router.replace(signInPath(lang, currentPath()));
     return true;
   }
 
@@ -154,7 +155,7 @@ export function SearchPanel({
     ).then((replies) => {
       if (!active) return;
       if (replies.some(({ response }) => response.status === 401)) {
-        router.replace(signInPath(lang));
+        router.replace(signInPath(lang, currentPath()));
         return;
       }
       const next = new Map<number, Roi>();
@@ -187,11 +188,7 @@ export function SearchPanel({
         : "";
 
   if (gate.status === "error") {
-    return (
-      <p role="alert" className="error">
-        {gate.message}
-      </p>
-    );
+    return <LoadError message={gate.message} retryLabel={common.retry} onRetry={gate.retry} />;
   }
   if (gate.status === "loading") {
     return <p role="status">{common.loading}</p>;

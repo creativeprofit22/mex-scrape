@@ -4,14 +4,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import { localeCookie, type Locale } from "@/i18n/config";
+import { localeCookie, localizedPath, type Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { api } from "@/lib/api/client";
-import { errorMessage } from "@/lib/ui";
+import { errorMessage, nextFromLocation, onboardingPath } from "@/lib/ui";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
-/** Sign-up or sign-in form; on success goes to onboarding or search. */
+/**
+ * Sign-up or sign-in form. On success goes to the validated `?next=` page
+ * (in the account's language), else search; onboarding comes first when it
+ * is unfinished.
+ */
 export function AuthForm({
   mode,
   lang,
@@ -42,8 +46,11 @@ export function AuthForm({
     if (data) {
       const locale = data.user.locale === "en" ? "en" : "es";
       document.cookie = `${localeCookie}=${locale}; path=/; max-age=${ONE_YEAR_SECONDS}; samesite=lax`;
-      const next = data.user.onboarded ? "search" : "onboarding";
-      router.push(`/${locale}/${next}`);
+      const saved = nextFromLocation();
+      const next = saved === null ? undefined : localizedPath(saved, locale);
+      router.push(
+        data.user.onboarded ? (next ?? `/${locale}/search`) : onboardingPath(locale, next),
+      );
       return;
     }
     setPending(false);

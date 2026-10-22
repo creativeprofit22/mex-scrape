@@ -124,10 +124,11 @@ for (const lang of ["es", "en"] as const satisfies readonly Lang[]) {
     // The account's saved language is Spanish, so sign-in lands on /es.
     await signIn(page, lang, pendingAccount);
     await expect(page).toHaveURL("/es/onboarding");
-    // A still-valid session that skips onboarding is sent back to it.
+    // A still-valid session that skips onboarding is sent back to it, with
+    // the page it asked for kept as `?next=` so finishing returns there.
     for (const path of ["/search", `/products/${ASIN}`]) {
       await page.goto(`/${lang}${path}`);
-      await page.waitForURL(`/${lang}/onboarding`);
+      await page.waitForURL(`/${lang}/onboarding?next=${encodeURIComponent(`/${lang}${path}`)}`);
       await expect(page.getByRole("checkbox", { name: t.onboarding.costco })).not.toBeChecked();
     }
     await expect(page.getByLabel(t.search.label)).toHaveCount(0);

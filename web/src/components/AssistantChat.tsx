@@ -8,7 +8,8 @@ import type { Dictionary } from "@/i18n/dictionaries";
 import { interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
 import { buildChatHistory, MAX_MESSAGE_CHARS, type ChatMessage } from "@/lib/chatHistory";
-import { errorMessage, retailerName, signInPath } from "@/lib/ui";
+import { LoadError } from "@/components/LoadError";
+import { currentPath, errorMessage, retailerName, signInPath } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
 
 type Message = ChatMessage;
@@ -46,7 +47,7 @@ export function AssistantChat({
 
   function unauthorized(status: number): boolean {
     if (status !== 401) return false;
-    router.replace(signInPath(lang));
+    router.replace(signInPath(lang, currentPath()));
     return true;
   }
 
@@ -130,11 +131,7 @@ export function AssistantChat({
   }
 
   if (gate.status === "error") {
-    return (
-      <p role="alert" className="error">
-        {gate.message}
-      </p>
-    );
+    return <LoadError message={gate.message} retryLabel={common.retry} onRetry={gate.retry} />;
   }
   if (gate.status === "loading") {
     return <p role="status">{common.loading}</p>;

@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { formatBasisPoints, formatMoney } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
-import { errorMessage, pesosToCentavos, signInPath } from "@/lib/ui";
+import { currentPath, errorMessage, pesosToCentavos, signInPath } from "@/lib/ui";
 
 type Field =
   | "sellPrice"
@@ -28,6 +28,70 @@ const FIELDS: readonly Field[] = [
   "unitsPerMonth",
 ];
 const REQUIRED = new Set<Field>(["sellPrice", "buyPrice", "fees"]);
+const EMPTY: Record<Field, string> = {
+  sellPrice: "",
+  buyPrice: "",
+  fees: "",
+  prep: "",
+  shipping: "",
+  monthlyFixed: "",
+  unitsPerMonth: "",
+};
+
+/** Tab-scoped store for typed values while the user signs in. */
+const DRAFT_KEY = "mex-scrape:calculator-draft";
+
+/** Keeps the typed values for this tab; a failure only loses the draft. */
+function saveDraft(values: Record<Field, string>): void {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(values));
+  } catch {
+    // Storage disabled or full: nothing to keep.
+  }
+}
+
+/** Drops the saved draft once the user is typing again. */
+function clearDraft(): void {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Storage disabled: there is no draft.
+  }
+}
+
+/** The saved draft as stored (a string, so React can compare snapshots). */
+function readDraft(): string | null {
+  try {
+    return sessionStorage.getItem(DRAFT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Nothing else writes the draft while the page is open. */
+function subscribeNever(): () => void {
+  return () => undefined;
+}
+
+/** Parses a saved draft; anything malformed is ignored. */
+function parseDraft(raw: string | null): Record<Field, string> | null {
+  if (raw === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const record = parsed as Record<string, unknown>;
+  const draft = {} as Record<Field, string>;
+  for (const field of FIELDS) {
+    const value = record[field];
+    if (typeof value !== "string") return null;
+    draft[field] = value;
+  }
+  return draft;
+}
 
 /** One-product cost calculator over `POST /roi` (same maths as search). */
 export function Calculator({
@@ -40,15 +104,11 @@ export function Calculator({
   common: Dictionary["common"];
 }) {
   const router = useRouter();
-  const [values, setValues] = useState<Record<Field, string>>({
-    sellPrice: "",
-    buyPrice: "",
-    fees: "",
-    prep: "",
-    shipping: "",
-    monthlyFixed: "",
-    unitsPerMonth: "",
-  });
+  // Values typed before a sign-in detour come back from sessionStorage; the
+  // server snapshot is null so hydration matches, then the draft shows.
+  const draft = useSyncExternalStore(subscribeNever, readDraft, () => null);
+  const [edited, setEdited] = useState<Record<Field, string> | null>(null);
+  const values = edited ?? parseDraft(draft) ?? EMPTY;
   const [result, setResult] = useState<Schemas["RoiItemResponse"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -87,6 +147,9 @@ export function Calculator({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // A restored draft becomes ordinary state now; a new 401 saves it again.
+    setEdited(values);
+    clearDraft();
     setResult(null);
     const item = parse();
     if (item === null) {
@@ -100,7 +163,8 @@ export function Calculator({
     });
     setPending(false);
     if (response.status === 401) {
-      router.replace(signInPath(lang));
+      saveDraft(values);
+      router.replace(signInPath(lang, currentPath()));
       return;
     }
     const first = data?.results[0];
@@ -136,15 +200,18 @@ export function Calculator({
         {FIELDS.map((field) => (
           <label key={field}>
             {dict[field]}
-            <input
-              name={field}
-              inputMode={field === "unitsPerMonth" ? "numeric" : "decimal"}
-              required={REQUIRED.has(field)}
-              value={values[field]}
-              onChange={(e) =>
-                setValues((old) => ({ ...old, [field]: e.target.value }))
-              }
-            />
+            <span className="field">
+              <input
+                name={field}
+                inputMode={field === "unitsPerMonth" ? "numeric" : "decimal"}
+                required={REQUIRED.has(field)}
+                value={values[field]}
+                onChange={(e) => {
+                  clearDraft();
+                  setEdited({ ...values, [field]: e.target.value });
+                }}
+              />
+            </span>
           </label>
         ))}
         <p role="alert" className="error">

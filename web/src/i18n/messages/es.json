@@ -19,11 +19,13 @@
   "common": {
     "loading": "Cargando…",
     "none": "—",
+    "retry": "Reintentar",
     "errors": {
       "generic": "Algo salió mal. Inténtalo de nuevo.",
       "rateLimited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
       "unavailable": "El servicio no está disponible en este momento.",
-      "csrf": "Tu sesión cambió. Recarga la página e inténtalo de nuevo."
+      "csrf": "Tu sesión cambió. Recarga la página e inténtalo de nuevo.",
+      "network": "No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo."
     }
   },
   "health": {
@@ -142,6 +144,7 @@
     "observations": "Observaciones",
     "empty": "Aún no hay historial para este producto.",
     "notFound": "No encontramos ese producto.",
+    "backToSearch": "Volver a buscar",
     "hidden": "{count} productos de tiendas ocultos porque requieren una membresía que no tienes."
   },
   "calculator": {
