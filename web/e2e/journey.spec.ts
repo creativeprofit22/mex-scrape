@@ -54,6 +54,16 @@ for (const lang of ["es", "en"] as const satisfies readonly Lang[]) {
     // Membership hiding, match badges and the /roi-computed profit.
     await expect(page.getByText(interpolate(t.search.hidden, { count: 1 }))).toBeVisible();
     await expect(page.locator("tbody tr").filter({ visible: true })).toHaveCount(3);
+    // Default order: profit, highest first (Costco $550, Liverpool $350),
+    // then the unmatched offer with no profit.
+    await expect(
+      page.getByRole("columnheader", { name: t.search.columns.profit }).filter({ visible: true }),
+    ).toHaveAttribute("aria-sort", "descending");
+    await expect(page.locator(".results-table tbody .row-select").filter({ visible: true })).toHaveText([
+      /E2E-COS-1/,
+      /E2E-LIV-1/,
+      /E2E-WAL-9/,
+    ]);
     const liverpool = page.getByRole("row", { name: /E2E-LIV-1/ });
     await expect(liverpool.getByText(t.search.match.accepted)).toBeVisible();
     await expect(liverpool.getByTestId("result-profit")).toHaveText(LIVERPOOL_PROFIT);

@@ -72,20 +72,22 @@
     "label": "Product to search for",
     "placeholder": "E.g. cordless drill",
     "submit": "Search",
-    "costsLegend": "Your per-unit costs",
-    "prep": "Prep (MXN)",
-    "shipping": "Shipping to Amazon (MXN)",
     "status": {
+      "idle": "Type a product to compare store prices with Amazon.",
       "queued": "Queued…",
-      "running": "Searching the stores…",
+      "running": "Checking stores…",
+      "runningStores": "Stores checked ({count}) · comparing with Amazon…",
       "done": "Search finished.",
       "partial": "Search finished with partial results.",
       "failed": "The search failed.",
       "refused": "The search was refused.",
-      "timeout": "The search is taking too long. Try again later."
+      "timeout": "The search is taking too long.",
+      "network": "The connection dropped during the search.",
+      "error": "The search could not be completed.",
+      "empty": "No offers found.",
+      "allHidden": "Every offer needs a membership you do not hold."
     },
     "resultsHeading": "Results for “{query}”",
-    "noResults": "No offers found.",
     "hidden": "{count} results hidden because they need a membership you do not hold.",
     "columns": {
       "product": "Product",
@@ -109,13 +111,15 @@
       "accepted": "Match",
       "needsReview": "Needs review",
       "none": "No match",
-      "history": "{asin} price history"
+      "history": "{asin} price history",
+      "historyShort": "History"
     },
     "membership": "Membership required",
     "storeLink": "View in store (opens in a new tab)",
     "outcomesHeading": "Stores checked",
     "offers": "{count} offers",
-    "outcomeLine": "{retailer}: {outcome} · {offers}",
+    "offersOne": "1 offer",
+    "outcomeLine": "{retailer} · {detail}",
     "outcomes": {
       "ok": "Checked",
       "category_only": "Category browsing only",
@@ -123,7 +127,58 @@
       "skipped_robots": "Skipped (robots.txt)",
       "failed": "Failed",
       "no_offers": "No offers"
-    }
+    },
+    "reasons": {
+      "all_retailers_failed": "No store responded.",
+      "retailers_failed": "Some stores did not respond; their offers are missing.",
+      "amazon_refused": "Amazon refused the price lookup.",
+      "amazon_unavailable": "Amazon did not respond; Amazon prices are missing.",
+      "refused": "This search is not allowed."
+    },
+    "next": {
+      "network": "Check your connection and try again; your search and costs are kept.",
+      "timeout": "Try again in a few minutes.",
+      "refused": "Try different words.",
+      "empty": "Try fewer words or a broader term.",
+      "allHidden": "Add your memberships to see these offers.",
+      "memberships": "Review my memberships"
+    },
+    "kpi": {
+      "label": "Search summary",
+      "bestProfit": "Best profit",
+      "offers": "Offers",
+      "stores": "Stores with offers",
+      "storesValue": "{withOffers} of {total}",
+      "hidden": "Hidden by membership"
+    },
+    "costs": {
+      "pill": "Costs: prep {prep} · shipping {shipping}",
+      "heading": "Your per-unit costs",
+      "prep": "Prep (MXN)",
+      "shipping": "Shipping to Amazon (MXN)",
+      "hint": "Saved in this browser and used in every search and in the calculator.",
+      "invalid": "Enter amounts in pesos, like 15 or 15.50.",
+      "apply": "Apply"
+    },
+    "filters": {
+      "label": "Filter results",
+      "matched": "Matches only",
+      "profitable": "Profit > 0",
+      "inStock": "In stock",
+      "count": "{shown} of {total} offers",
+      "noMatches": "No offer matches these filters.",
+      "clear": "Clear filters"
+    },
+    "sign": {
+      "plus": "+",
+      "minus": "−",
+      "down": "↓"
+    },
+    "recent": {
+      "heading": "Recent searches"
+    },
+    "roiRetry": "Calculate again",
+    "storeLinkShort": "View in store"
   },
   "product": {
     "heading": "{asin} price history",

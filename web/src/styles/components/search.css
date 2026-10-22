@@ -1,0 +1,704 @@
+/*
+ * Search workspace (docs/modules/web/search.md, style-pack §3, §5).
+ * Toolbar, costs editor, status line, KPI strip, filter chips, results
+ * table (cards in narrow containers), recent searches and static
+ * skeletons. Tokens only; no motion beyond the shared press feedback.
+ */
+
+/* ---------- Shared resets ---------- */
+
+.muted {
+  color: var(--muted);
+}
+
+/* Signed values: colour reinforces the sign and ↓ glyph, never alone. */
+.gain {
+  color: var(--gain);
+  font-weight: 600;
+}
+
+.loss {
+  color: var(--loss);
+  font-weight: 600;
+}
+
+.signed__down {
+  margin-inline-start: 0.15em;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---------- Toolbar ---------- */
+
+.search-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.field--toolbar > input {
+  min-height: 48px;
+}
+
+.search-toolbar__submit {
+  min-height: 48px;
+}
+
+/* ---------- Costs pill and editor (a disclosure) ---------- */
+
+.costs {
+  position: relative;
+}
+
+.costs-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  font-size: var(--text-table);
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--press-duration) var(--press-ease);
+}
+
+.costs-pill[aria-expanded="true"],
+.costs-pill:active {
+  background: var(--sheet-press);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .costs-pill:hover:not([aria-expanded="true"], :active) {
+    background: var(--sheet-hover);
+  }
+}
+
+.costs-editor {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  inset-inline-end: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: min(20rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-4);
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+}
+
+.costs-editor[hidden] {
+  display: none;
+}
+
+.costs-editor__heading {
+  margin: 0;
+  font-weight: 600;
+}
+
+.costs-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  font-weight: 500;
+}
+
+.costs-editor p {
+  margin: 0;
+}
+
+/* ---------- Status line ---------- */
+
+.search-status {
+  margin-bottom: var(--space-5);
+}
+
+.search-status__line {
+  margin: 0;
+  font-weight: 500;
+}
+
+.search-status > .error,
+.search-status__reason {
+  margin: var(--space-1) 0 0;
+}
+
+.search-status__next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.search-status__next p {
+  margin: 0;
+}
+
+.search-status__next a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control);
+}
+
+.store-outcomes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.store-outcome {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-tag);
+  color: var(--muted);
+  font-size: var(--text-table);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.8;
+}
+
+.store-outcome--bad {
+  border-color: currentColor;
+  color: var(--loss);
+}
+
+/* ---------- KPI strip ---------- */
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+}
+
+.kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.kpi-tile__label {
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.kpi-tile__value {
+  margin: 0;
+  font-size: var(--text-kpi);
+  font-stretch: var(--stretch-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Static skeletons (see sources#antd-skeleton) ---------- */
+
+.skeleton {
+  display: block;
+  border-radius: var(--radius-tag);
+  background: var(--sheet-press);
+}
+
+.skeleton--label {
+  width: 7rem;
+  height: var(--text-label);
+}
+
+.skeleton--numeral {
+  width: 8rem;
+  height: var(--text-kpi);
+}
+
+.skeleton--title {
+  width: 60%;
+  height: var(--text-table);
+}
+
+.skeleton--value {
+  width: 4rem;
+  height: var(--text-table);
+  justify-self: end;
+}
+
+.skeleton-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5rem 5rem;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: var(--row);
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.skeleton-row:last-child {
+  border-bottom: 0;
+}
+
+/* ---------- Filter chips (see sources#kinetics-chips) ---------- */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  font-size: var(--text-table);
+  font-weight: 500;
+  transition: background-color var(--press-duration) var(--press-ease);
+}
+
+/* On: tint, accent text and a drawn check, so the state is never colour-only. */
+.chip[aria-pressed="true"] {
+  border-color: var(--accent-text);
+  background: var(--tint);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.chip[aria-pressed="true"]::before {
+  content: "";
+  width: 0.35em;
+  height: 0.7em;
+  margin-top: -0.15em;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.chip[aria-pressed="false"]:active {
+  background: var(--sheet-press);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip[aria-pressed="false"]:hover:not(:active) {
+    background: var(--sheet-hover);
+  }
+}
+
+.result-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-table);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Results ---------- */
+
+.results-section > h2 {
+  margin-top: 0;
+}
+
+.results-empty,
+.roi-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.results-empty {
+  padding: var(--space-4);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.results-empty p,
+.roi-error p {
+  margin: 0;
+}
+
+/* The container picks the layout from its own width: below 40rem (phones,
+   and the 768px viewport beside the sidebar) cards, the table above. The
+   hidden one is display:none, so it leaves the accessibility tree. */
+.results {
+  container: results / inline-size;
+  margin-bottom: var(--space-6);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.results-table {
+  display: none;
+}
+
+@container results (min-width: 40rem) {
+  .results-table {
+    display: table;
+  }
+
+  .result-cards {
+    display: none;
+  }
+}
+
+/* Sticky header on the sheet; .workspace is the scroller. */
+.results-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--sheet);
+  box-shadow: inset 0 -1px 0 var(--rule);
+}
+
+.results-table th,
+.results-table td {
+  vertical-align: middle;
+}
+
+.results-table tbody > tr {
+  position: relative;
+}
+
+.results-table tbody th,
+.results-table tbody td {
+  height: var(--row);
+}
+
+/* The product column takes the slack; the others shrink to their content. */
+.results-table tbody th {
+  width: 100%;
+  min-width: 14rem;
+}
+
+/* Sort header (see sources#sort-header): the button carries the click,
+   the th carries aria-sort; the arrow is decoration. */
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+}
+
+/* Headers may wrap ("Ganancia estimada"); values and tags never do. */
+.results-table thead th.num {
+  white-space: normal;
+}
+
+th.num .sort-button {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.results .tag {
+  white-space: nowrap;
+}
+
+.sort-button::after {
+  content: "↕" / "";
+  color: var(--rule-strong);
+}
+
+.sort-button[data-sort="ascending"],
+.sort-button[data-sort="descending"] {
+  color: var(--ink);
+}
+
+.sort-button[data-sort="ascending"]::after {
+  content: "↑" / "";
+  color: currentColor;
+}
+
+.sort-button[data-sort="descending"]::after {
+  content: "↓" / "";
+  color: currentColor;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sort-button:hover {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+}
+
+/* Row selection (style-pack §5): the title button is the only control; its
+   ::after stretches over the row or card. Links sit above it. */
+.row-select {
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: start;
+}
+
+/* The ring stays on the button itself (base :focus-visible); the stretched
+   ::after only widens the hit area. */
+.row-select::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+}
+
+.result-meta .tag {
+  margin-left: 0;
+}
+
+.result-meta__store {
+  color: var(--muted);
+  font-size: var(--text-table);
+}
+
+.result-link {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: var(--text-table);
+}
+
+.amazon-match {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.amazon-match .tag {
+  margin: 0 var(--space-2) 0 0;
+}
+
+.amazon-match__line {
+  display: flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+}
+
+.amazon-match__price {
+  font-variant-numeric: tabular-nums;
+}
+
+.results-table tbody > tr.is-selected,
+.result-card.is-selected {
+  background: var(--tint);
+}
+
+.results-table tbody > tr.is-selected > :first-child,
+.result-card.is-selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .results-table tbody > tr:not(.is-selected):hover,
+  .result-card:not(.is-selected):hover {
+    background: var(--sheet-hover);
+  }
+}
+
+/* Cards */
+.result-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-card {
+  position: relative;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.result-card:last-child {
+  border-bottom: 0;
+}
+
+.result-card__values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.result-card__values dt {
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.result-card__values dd {
+  margin: 0;
+  text-align: left;
+}
+
+.result-card__wide {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Recent searches ---------- */
+
+.recent-searches__heading {
+  margin: 0 0 var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.recent-searches__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-searches__list a {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  overflow: hidden;
+  color: var(--ink);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .recent-searches__list a:hover {
+    color: var(--accent-text);
+    text-decoration: underline;
+  }
+}
+
+.sidebar__recent {
+  margin-top: var(--space-5);
+  padding: 0 var(--space-3);
+}
+
+.sidebar__recent .recent-searches__list a {
+  font-size: var(--text-table);
+}
+
+.recent-searches--phone {
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+/* The sidebar copy shows from 768px, so the page copy is phones only. */
+@media (min-width: 48rem) {
+  .recent-searches--phone {
+    display: none;
+  }
+}
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 47.999rem) {
+  /* Pill and Buscar share row two at one height, even when the pill wraps (en). */
+  .search-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+  }
+
+  .search-toolbar > .costs {
+    display: flex;
+  }
+
+  .search-toolbar > .field--toolbar {
+    grid-column: 1 / -1;
+  }
+
+  .costs-pill {
+    width: 100%;
+    text-align: left;
+  }
+
+  .costs-editor {
+    inset-inline: 0 auto;
+  }
+
+  .kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi-tile__value {
+    font-size: var(--text-title);
+  }
+}
+
+/* ---------- Touch: 44px targets ---------- */
+
+@media (pointer: coarse) {
+  .chip,
+  .sort-button,
+  .result-link,
+  .recent-searches__list a {
+    min-height: var(--control);
+  }
+
+  .row-select {
+    min-height: var(--control);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .costs-pill,
+  .chip {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .chip[aria-pressed="true"],
+  .results-table tbody > tr.is-selected > :first-child,
+  .result-card.is-selected {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

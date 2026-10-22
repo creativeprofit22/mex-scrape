@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
+import { RecentSearches } from "@/components/search/RecentSearches";
 import { NAV_ITEMS, navHref } from "@/lib/nav";
 
 import { AccountMenu, AccountMenuPlaceholder } from "./AccountMenu";
@@ -29,7 +30,7 @@ export function Sidebar({ lang, dict }: { lang: Locale; dict: Dictionary }) {
         className="sidebar__nav"
         listClassName="nav-list"
       />
-      {/* Recent searches slot: filled in a later phase (style-pack §1a). */}
+      <RecentSearches lang={lang} heading={dict.search.recent.heading} className="sidebar__recent" />
       <div className="sidebar__footer">
         <Suspense fallback={<AccountMenuPlaceholder variant="sidebar" />}>
           <AccountMenu variant="sidebar" lang={lang} nav={dict.nav} plans={dict.account.plans} errors={dict.common.errors} />

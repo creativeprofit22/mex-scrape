@@ -19,7 +19,7 @@ The root layout `src/app/[lang]/layout.tsx` holds `<html>`/`<body>`, the font, t
 - `AccountMenu` (`sidebar` and `header` variants): signed out → sign-in and sign-up links, which carry `?next=` back to the current page (or keep the validated `?next=` already on an auth page). Signed in → email and plan (sidebar only), the account link and `SignOutButton`. `SignOutButton` leaves for sign-in only when `POST /auth/signout` answers 204 (or 401, already signed out); any other answer keeps the user on the page with a `role="alert"` message from `common.errors`, since the session is still alive. The button is disabled while the request runs. While `loading` or `unknown` it renders `AccountMenuPlaceholder`: an `aria-hidden` box the size of the loaded menu with **no links**, so the frame never offers the wrong links and nothing shifts.
 - `PrimaryNav` / `ActiveNavLinks` / `NavLinkList`: a labelled `<nav>` whose current item comes from `usePathname()`. Its `<Suspense>` fallback (used while prerendering request-time pages) is the same links with nothing marked current.
 - `FrameLanguage`: wraps `LanguageToggle` (keeps the path, sets the `lang` cookie, `PUT /me/locale` when signed in); its fallback is a plain link to the other language's home.
-- `Sidebar`, `TopBar`, `BottomTabs`, `Wordmark`, `AppShell`, `PublicFrame`.
+- `Sidebar`, `TopBar`, `BottomTabs`, `Wordmark`, `AppShell`, `PublicFrame`. Between its nav and the account menu the sidebar holds `RecentSearches` (searches saved in this browser, each a `?q=` link that reruns it; nothing renders until one is saved). On phones the same list shows on the idle search page instead ([search](search.md)).
 
 ## Current page
 

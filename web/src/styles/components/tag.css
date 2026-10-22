@@ -22,3 +22,7 @@
 .tag-warn {
   color: var(--warn);
 }
+
+.tag-loss {
+  color: var(--loss);
+}

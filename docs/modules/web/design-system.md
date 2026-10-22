@@ -19,13 +19,14 @@ Later layers win whatever the specificity, so a component rule always beats a ba
 | `src/styles/tokens.css` | `tokens` | every custom property, light and dark; the only file with colour values |
 | `src/styles/base.css` | `base` | reset, `body`, type roles, links, the focus ring, `.skip-link`, forced-colours focus |
 | `src/styles/layout.css` | `layout` | `.stack`, `.actions`, lone-link targets |
-| `src/styles/components/button.css` | `components` | primary `button` / `.button`, `button.secondary`, `.link-button`, disabled, reduced motion |
+| `src/styles/components/button.css` | `components` | primary `button` / `.button`, `button.secondary`, `.link-button`, `.plain-button` (opts out of all three for self-drawn controls), disabled, reduced motion |
 | `src/styles/components/field.css` | `components` | `.field` wrapper, `input`, `textarea`, `fieldset`, `legend`, `.check` |
 | `src/styles/components/shell.css` | `components` | `.app-shell`, `.sidebar`, `.workspace`, `.top-bar`, `.bottom-tabs`, `.nav-list`, `.tab-list`, `.wordmark`, `.account-menu*`, `.public-frame*`, `.account-facts` ([app-shell](app-shell.md)) |
-| `src/styles/components/tag.css` | `components` | `.tag`, `.tag-gain`, `.tag-warn` |
+| `src/styles/components/tag.css` | `components` | `.tag`, `.tag-gain`, `.tag-warn`, `.tag-loss` |
 | `src/styles/components/feedback.css` | `components` | `.error`, `.hint`, `.load-error` |
 | `src/styles/components/table.css` | `components` | `.table-wrap`, `table`, `caption`, `th`/`td`, `.retailer`, `.facts`, `.outcomes` |
 | `src/styles/components/chart.css` | `components` | `.chart`, `.legend`, `details`/`summary` |
+| `src/styles/components/search.css` | `components` | the search workspace: `.search-toolbar`, `.costs-pill`, `.costs-editor`, `.search-status`, `.store-outcomes`, `.kpi-strip`, `.kpi-tile`, `.filter-bar`, `.chip`, `.results`, `.results-table`, `.sort-button`, `.row-select`, `.result-cards`, `.result-card`, `.skeleton*`, `.recent-searches*`, `.gain`, `.loss` ([search](search.md)) |
 | `src/styles/components/chat.css` | `components` | `.chat-log`, `.chat-user`, `.chat-bot`, `.chat-who`, `.chat-text`, `.suggestions`, `.suggestion` |
 
 The `utilities` layer is declared but empty; put single-purpose override classes there.
@@ -79,12 +80,13 @@ Archivo comes from `next/font/google` in `src/app/[lang]/layout.tsx` (`axes: ["w
 - **Secondary** (`button.secondary`): sheet fill, `--rule-strong` border, ink text.
 - **Link button** (`.link-button`): a button that looks like a link (sign out); 44px on coarse pointers.
 - **Field**: wrap each text input or textarea in `<span className="field">` inside its `<label>`, so the label association stays implicit. The wrapper draws the border; `[aria-invalid="true"]` inside it turns the border `--loss`. Inputs are 16px (no iOS zoom) and 44px tall. Checkboxes use `label.check` and `accent-color`.
-- **Tag** (`.tag`, `.tag-gain`, `.tag-warn`): outlined, no fill, label type; muted by default.
+- **Tag** (`.tag`, `.tag-gain`, `.tag-warn`, `.tag-loss`): outlined, no fill, label type; muted by default.
+- **Plain button** (`.plain-button`): no fill, border or push edge; for controls that draw themselves (filter chips, sort headers, row titles, the costs pill). Keeps the focus ring.
 - **Feedback**: `.error` (`--loss`, hidden when empty), `.hint` (muted), `.load-error` (the `LoadError` panel: sheet, hairline, error text plus retry).
 - **Focus ring**: `:focus-visible` is a 2px `--accent-text` outline with a 2px offset (field controls offset 3px to clear the wrapper border); `Highlight` in forced colours.
 - **Targets**: frame links, lone links (`.actions > a`, a link alone in a paragraph) and the account page's language toggle and sign-out are `--control` (44px) tall at every pointer; the link button elsewhere gets 44px under `(pointer: coarse)`.
 
-Keep the class names the e2e tests select on: `.chat`, `.chat-bot`, `.chat-text`, `details`, `tbody tr`.
+Keep the class names the e2e tests select on: `.chat`, `.chat-bot`, `.chat-text`, `details`, `tbody tr`, `.results-table`, `.row-select`, `.result-card`.
 
 ## Add a component stylesheet
 

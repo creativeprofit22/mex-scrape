@@ -72,20 +72,22 @@
     "label": "Producto a buscar",
     "placeholder": "Ej. taladro inalámbrico",
     "submit": "Buscar",
-    "costsLegend": "Tus costos por unidad",
-    "prep": "Preparación (MXN)",
-    "shipping": "Envío a Amazon (MXN)",
     "status": {
+      "idle": "Escribe un producto para comparar precios de tiendas con Amazon.",
       "queued": "En cola…",
-      "running": "Buscando en las tiendas…",
+      "running": "Consultando tiendas…",
+      "runningStores": "Tiendas consultadas ({count}) · comparando con Amazon…",
       "done": "Búsqueda terminada.",
       "partial": "Búsqueda terminada con resultados parciales.",
       "failed": "La búsqueda falló.",
       "refused": "La búsqueda fue rechazada.",
-      "timeout": "La búsqueda está tardando demasiado. Vuelve a intentarlo más tarde."
+      "timeout": "La búsqueda está tardando demasiado.",
+      "network": "Se perdió la conexión durante la búsqueda.",
+      "error": "No se pudo completar la búsqueda.",
+      "empty": "No se encontraron ofertas.",
+      "allHidden": "Todas las ofertas requieren una membresía que no tienes."
     },
     "resultsHeading": "Resultados para «{query}»",
-    "noResults": "No se encontraron ofertas.",
     "hidden": "{count} resultados ocultos porque requieren una membresía que no tienes.",
     "columns": {
       "product": "Producto",
@@ -109,13 +111,15 @@
       "accepted": "Coincidencia",
       "needsReview": "Revisar coincidencia",
       "none": "Sin coincidencia",
-      "history": "Historial de {asin}"
+      "history": "Historial de {asin}",
+      "historyShort": "Historial"
     },
     "membership": "Requiere membresía",
-    "storeLink": "Ver en la tienda (se abre en otra pestaña)",
+    "storeLink": "Ver en tienda (se abre en otra pestaña)",
     "outcomesHeading": "Tiendas consultadas",
     "offers": "{count} ofertas",
-    "outcomeLine": "{retailer}: {outcome} · {offers}",
+    "offersOne": "1 oferta",
+    "outcomeLine": "{retailer} · {detail}",
     "outcomes": {
       "ok": "Consultada",
       "category_only": "Solo por categorías",
@@ -123,7 +127,58 @@
       "skipped_robots": "Omitida (robots.txt)",
       "failed": "Falló",
       "no_offers": "Sin ofertas"
-    }
+    },
+    "reasons": {
+      "all_retailers_failed": "Ninguna tienda respondió.",
+      "retailers_failed": "Algunas tiendas no respondieron; faltan sus ofertas.",
+      "amazon_refused": "Amazon rechazó la consulta de precios.",
+      "amazon_unavailable": "Amazon no respondió; faltan los precios de Amazon.",
+      "refused": "Esta búsqueda no está permitida."
+    },
+    "next": {
+      "network": "Revisa tu conexión y vuelve a intentarlo; se conservan tu búsqueda y tus costos.",
+      "timeout": "Vuelve a intentarlo en unos minutos.",
+      "refused": "Prueba con otras palabras.",
+      "empty": "Prueba con menos palabras o un término más general.",
+      "allHidden": "Indica tus membresías para ver estas ofertas.",
+      "memberships": "Revisar mis membresías"
+    },
+    "kpi": {
+      "label": "Resumen de la búsqueda",
+      "bestProfit": "Mejor ganancia",
+      "offers": "Ofertas",
+      "stores": "Tiendas con ofertas",
+      "storesValue": "{withOffers} de {total}",
+      "hidden": "Ocultas por membresía"
+    },
+    "costs": {
+      "pill": "Costos: prep {prep} · envío {shipping}",
+      "heading": "Tus costos por unidad",
+      "prep": "Preparación (MXN)",
+      "shipping": "Envío a Amazon (MXN)",
+      "hint": "Se guardan en este navegador y se usan en cada búsqueda y en la calculadora.",
+      "invalid": "Escribe montos en pesos, como 15 o 15.50.",
+      "apply": "Aplicar"
+    },
+    "filters": {
+      "label": "Filtrar resultados",
+      "matched": "Solo coincidencias",
+      "profitable": "Ganancia > 0",
+      "inStock": "Disponibles",
+      "count": "{shown} de {total} ofertas",
+      "noMatches": "Ninguna oferta cumple estos filtros.",
+      "clear": "Quitar filtros"
+    },
+    "sign": {
+      "plus": "+",
+      "minus": "−",
+      "down": "↓"
+    },
+    "recent": {
+      "heading": "Búsquedas recientes"
+    },
+    "roiRetry": "Volver a calcular",
+    "storeLinkShort": "Ver en tienda"
   },
   "product": {
     "heading": "Historial de precios de {asin}",

@@ -6,6 +6,8 @@ import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { formatBasisPoints, formatMoney } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
+import { centavosToPesosInput } from "@/lib/search/storage";
+import { useCosts } from "@/lib/search/useSearchStore";
 import { errorMessage, pesosToCentavos } from "@/lib/ui";
 import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
@@ -108,7 +110,18 @@ export function Calculator({
   // server snapshot is null so hydration matches, then the draft shows.
   const draft = useSyncExternalStore(subscribeNever, readDraft, () => null);
   const [edited, setEdited] = useState<Record<Field, string> | null>(null);
-  const values = edited ?? parseDraft(draft) ?? EMPTY;
+  // With no draft, prep and shipping start from the costs saved on search.
+  const [savedCosts] = useCosts();
+  const values =
+    edited ??
+    parseDraft(draft) ??
+    (savedCosts
+      ? {
+          ...EMPTY,
+          prep: centavosToPesosInput(savedCosts.prep),
+          shipping: centavosToPesosInput(savedCosts.shipping),
+        }
+      : EMPTY);
   const [result, setResult] = useState<Schemas["RoiItemResponse"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);

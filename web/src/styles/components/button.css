@@ -1,5 +1,7 @@
 /*
- * Buttons: primary (push-button), secondary, link.
+ * Buttons: primary (push-button), secondary, link. .plain-button opts out
+ * of all three for controls that draw themselves (chips, sort headers,
+ * row titles, the costs pill; see search.css).
  * Primary press model: conformed variant of the kinetics push-button
  * (library/conformed/kinetics/push-button.css) — 2px edge, 1px travel,
  * tokenised timing, reduced-motion rule. see sources#push-button
@@ -11,7 +13,7 @@ button {
 }
 
 /* Primary: every plain <button> and .button links */
-button:not(.secondary, .link-button),
+button:not(.secondary, .link-button, .plain-button),
 .button {
   display: inline-flex;
   align-items: center;
@@ -34,7 +36,7 @@ button:not(.secondary, .link-button),
     background-color var(--press-duration) var(--press-ease);
 }
 
-button:not(.secondary, .link-button):active:not(:disabled),
+button:not(.secondary, .link-button, .plain-button):active:not(:disabled),
 .button:active {
   transform: translateY(1px);
   background: var(--accent-press);
@@ -42,7 +44,7 @@ button:not(.secondary, .link-button):active:not(:disabled),
 }
 
 @media (hover: hover) and (pointer: fine) {
-  button:not(.secondary, .link-button):hover:not(:disabled, :active),
+  button:not(.secondary, .link-button, .plain-button):hover:not(:disabled, :active),
   .button:hover:not(:active) {
     background: var(--accent-hover);
   }
@@ -99,6 +101,19 @@ button.secondary:active:not(:disabled) {
   }
 }
 
+/* Plain: no chrome; the component class draws it */
+.plain-button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+}
+
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -106,13 +121,13 @@ button:disabled {
 
 /* Reduced motion: keep the colour change, drop the travel */
 @media (prefers-reduced-motion: reduce) {
-  button:not(.secondary, .link-button),
+  button:not(.secondary, .link-button, .plain-button),
   .button,
   button.secondary {
     transition: none;
   }
 
-  button:not(.secondary, .link-button):active:not(:disabled),
+  button:not(.secondary, .link-button, .plain-button):active:not(:disabled),
   .button:active {
     transform: none;
     box-shadow: 0 2px 0 var(--accent-edge);
