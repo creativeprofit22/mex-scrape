@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { formatMoney, interpolate } from "../src/i18n/format";
+import { formatBasisPoints, formatMoney, interpolate } from "../src/i18n/format";
 import type { components } from "../src/lib/api/schema";
 import { COSTS_KEY, RECENT_KEY } from "../src/lib/search/storage";
 import { ASIN, account, catalogs, expectAccessible } from "./helpers";
@@ -10,6 +10,10 @@ import { ASIN, account, catalogs, expectAccessible } from "./helpers";
 
 const t = catalogs.es;
 const s = t.search;
+
+// Wide enough for the results table beside the 400px detail panel: the
+// results column shows cards below 53rem, which is about 1550px with the panel.
+test.use({ viewport: { width: 1600, height: 900 } });
 
 type Schemas = components["schemas"];
 type Scenario =
@@ -167,10 +171,64 @@ type FakeApi = {
   roiBodies: Schemas["RoiRequest"][];
   /** `GET /searches/{id}` count per search id. */
   polls: Map<number, number>;
+  /** Status `POST /matches/decisions` answers with (200 stores it). */
+  decisionStatus: number;
+  decisionBodies: Schemas["MatchDecisionRequest"][];
+  /** `GET /products/{asin}/price-history` answers 500. */
+  historyFails: boolean;
+  /** Milliseconds `GET /products/{asin}/price-history` waits before answering. */
+  historyDelayMs: number;
+  /** `days` of each price-history request, by ASIN. */
+  historyDays: string[];
+  /**
+   * Price history lists a needs-review listing only once an accept for its
+   * ASIN was saved, as the api does (ADR 0013).
+   */
+  historyAcceptedOnly: boolean;
+  /** `hidden_listings` of each price-history reply (membership stores the user lacks). */
+  hiddenListings: number;
 };
 
+const AS_OF_MS = 1_792_600_000_000;
+const DAY = 86_400_000;
+
+/** Ten days of prices for the panel's chart; Beta's product has none yet. */
+function history(asin: string): Schemas["PriceHistoryResponse"] {
+  const listing = RESULTS.find((r) => r.amazon?.asin === asin);
+  const points =
+    asin === "B0SYNBETA1" || !listing
+      ? []
+      : Array.from({ length: 10 }, (_, i) => ({
+          day_ms: AS_OF_MS - (9 - i) * DAY,
+          low_centavos: listing.price_centavos + (i % 3) * 2_000,
+          high_centavos: listing.price_centavos + 5_000,
+          in_stock: true,
+        }));
+  return {
+    asin,
+    as_of_ms: AS_OF_MS,
+    since_ms: AS_OF_MS - 90 * DAY,
+    hidden_listings: 0,
+    listings: listing ? [{ retailer: listing.retailer, retailer_sku: listing.retailer_sku, points }] : [],
+  };
+}
+
 async function fakeApi(page: Page, scenario: Scenario = "done"): Promise<FakeApi> {
-  const api: FakeApi = { scenario, roiFails: false, dropPolls: false, queries: [], roiBodies: [], polls: new Map() };
+  const api: FakeApi = {
+    scenario,
+    roiFails: false,
+    dropPolls: false,
+    queries: [],
+    roiBodies: [],
+    polls: new Map(),
+    decisionStatus: 200,
+    decisionBodies: [],
+    historyFails: false,
+    historyDelayMs: 0,
+    historyDays: [],
+    historyAcceptedOnly: false,
+    hiddenListings: 0,
+  };
   const searches = new Map<number, { query: string; scenario: Scenario }>();
   await page.route("**/backend/**", async (route) => {
     const request = route.request();
@@ -200,8 +258,26 @@ async function fakeApi(page: Page, scenario: Scenario = "done"): Promise<FakeApi
       if (api.roiFails) return route.fulfill({ status: 500, json: { error: "internal" } });
       return route.fulfill({ json: { results: body.items.map(roi) } });
     }
-    if (path.endsWith("/price-history")) {
-      return route.fulfill({ json: { asin: ASIN, as_of_ms: 0, since_ms: 0, hidden_listings: 0, listings: [] } });
+    if (path === "/matches/decisions" && request.method() === "POST") {
+      const body = request.postDataJSON() as Schemas["MatchDecisionRequest"];
+      api.decisionBodies.push(body);
+      if (api.decisionStatus !== 200) {
+        const error = api.decisionStatus === 409 ? "not_reviewable" : "internal";
+        return route.fulfill({ status: api.decisionStatus, json: { error } });
+      }
+      return route.fulfill({ json: body });
+    }
+    const historyOf = /^\/products\/([^/]+)\/price-history$/.exec(path);
+    if (historyOf) {
+      const asin = historyOf[1] ?? ASIN;
+      api.historyDays.push(`${asin}:${new URL(request.url()).searchParams.get("days") ?? ""}`);
+      if (api.historyDelayMs > 0) await new Promise((done) => setTimeout(done, api.historyDelayMs));
+      if (api.historyFails) return route.fulfill({ status: 500, json: { error: "internal" } });
+      const body = { ...history(asin), hidden_listings: api.hiddenListings };
+      const pending = RESULTS.find((r) => r.amazon?.asin === asin)?.amazon?.match_status === "needs_review";
+      const accepted = api.decisionBodies.some((b) => b.asin === asin && b.decision === "accept");
+      if (api.historyAcceptedOnly && pending && !accepted) body.listings = [];
+      return route.fulfill({ json: body });
     }
     if (path.endsWith("/price-stats")) {
       return route.fulfill({ json: { asin: ASIN, as_of_ms: 0, hidden_listings: 0, listings: [] } });
@@ -700,4 +776,301 @@ test.describe("phone", () => {
     expect(overflow).toBeLessThanOrEqual(0);
     await expectAccessible(page);
   });
+});
+
+// The detail panel (docs/modules/web/detail-panel.md): an inline aside at
+// ≥1200px, a modal <dialog> sheet below.
+const d = t.detail;
+const panel = (page: Page) => page.getByTestId("detail-panel").filter({ visible: true });
+const titleButton = (page: Page, key: string) =>
+  page.locator(`[data-row-key="${key}"]`).filter({ visible: true });
+const GAMMA = "chedraui/CH-1";
+
+async function openRow(page: Page, title: string): Promise<void> {
+  await rowFor(page, title).locator(".row-select").click();
+  await expect(panel(page).getByRole("heading", { level: 2, name: title })).toBeVisible();
+}
+
+test.describe("detail panel, inline at 1440", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("shows the match, profit and 90-day chart; Confirmar updates the row badge", async ({ page }) => {
+    const api = await fakeApi(page);
+    await openSearch(page);
+    await runSearch(page, "licuadora");
+    // Nothing picked: the reserved column says how to fill it.
+    await expect(page.getByRole("complementary", { name: d.emptyLabel })).toHaveText(d.empty);
+
+    await openRow(page, "Cafetera Gamma");
+    const aside = panel(page);
+    await expect(aside).toHaveJSProperty("tagName", "ASIDE");
+    await expect(page.locator("dialog[open]")).toHaveCount(0);
+    const store = t.retailers.chedraui;
+    const link = aside.getByRole("link", { name: interpolate(d.openStore, { store }) });
+    await expect(link).toHaveAttribute("href", "https://example.com/chedraui/CH-1");
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    const meter = aside.getByRole("meter", {
+      name: interpolate(d.confidenceValue, { value: formatBasisPoints(6_100, "es") }),
+    });
+    await expect(meter).toHaveAttribute("value", "6100");
+    await expect(aside.getByTestId("detail-profit")).toHaveText(s.sign.plus + formatMoney(18_000, "es"));
+    // Costs carry a minus; the unsaved (zero) prep has none.
+    const breakdown = aside.locator(".breakdown");
+    await expect(breakdown.locator("div", { hasText: d.purchase }).locator("dd")).toHaveText(
+      s.sign.minus + formatMoney(64_900, "es"),
+    );
+    await expect(breakdown.locator("div", { hasText: d.prep }).locator("dd")).toHaveText(formatMoney(0, "es"));
+    await expect(aside.getByRole("img", { name: /.+/ })).toBeVisible();
+    expect(api.historyDays).toContain("B0SYNGAMA1:90");
+    await expect(aside.getByRole("link", { name: d.fullHistory })).toHaveAttribute(
+      "href",
+      "/es/products/B0SYNGAMA1",
+    );
+    await expectAccessible(page);
+
+    await aside.getByRole("button", { name: d.confirm }).click();
+    await expect(aside.getByTestId("detail-outcome")).toHaveText(d.confirmed);
+    await expect(aside.getByTestId("detail-outcome")).toBeFocused();
+    expect(api.decisionBodies).toEqual([
+      { asin: "B0SYNGAMA1", retailer: "chedraui", retailer_sku: "CH-1", decision: "accept" },
+    ]);
+    await expect(rowFor(page, "Cafetera Gamma").getByText(s.match.accepted)).toBeVisible();
+    await expect(aside.getByRole("button", { name: d.confirm })).toHaveCount(0);
+
+    // × clears the selection and returns focus to the row.
+    await aside.getByRole("button", { name: d.close }).click();
+    await expect(page.getByRole("complementary", { name: d.emptyLabel })).toBeVisible();
+    await expect(titleButton(page, GAMMA)).toBeFocused();
+    await expect(titleButton(page, GAMMA)).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("Descartar saves a reject: the row loses its match and its profit", async ({ page }) => {
+    const api = await fakeApi(page);
+    await openSearch(page);
+    await runSearch(page, "licuadora");
+    const noProfit = await rowFor(page, "Hervidor Delta").getByTestId("result-profit").textContent();
+    await openRow(page, "Cafetera Gamma");
+    await panel(page).getByRole("button", { name: d.reject }).click();
+    await expect(panel(page).getByTestId("detail-outcome")).toHaveText(d.rejected);
+    expect(api.decisionBodies.map((b) => b.decision)).toEqual(["reject"]);
+    const gamma = rowFor(page, "Cafetera Gamma");
+    await expect(gamma.getByText(s.match.none)).toBeVisible();
+    await expect(gamma.getByTestId("result-profit")).toHaveText(noProfit ?? "");
+    await expectAccessible(page);
+  });
+
+  test("Confirmar reloads the chart: the accepted listing joins the history", async ({ page }) => {
+    const api = await fakeApi(page);
+    api.historyAcceptedOnly = true;
+    await openSearch(page);
+    await runSearch(page, "licuadora");
+    await openRow(page, "Cafetera Gamma");
+    const aside = panel(page);
+    await expect(aside.getByTestId("history-empty")).toHaveText(d.historyEmpty);
+    await expect(aside.locator('svg[role="img"]')).toHaveCount(0);
+
+    await aside.getByRole("button", { name: d.confirm }).click();
+    await expect(aside.getByTestId("detail-outcome")).toHaveText(d.confirmed);
+    // Same panel, no close and reopen: the chart now draws Gamma's prices.
+    await expect(aside.locator('svg[role="img"]')).toBeVisible();
+    await expect(aside.getByTestId("history-empty")).toHaveCount(0);
+    await expect(aside.getByTestId("detail-outcome")).toBeFocused();
+    expect(api.historyDays.filter((entry) => entry === "B0SYNGAMA1:90")).toHaveLength(2);
+  });
+
+  test("a failed decision shows inline with a retry", async ({ page }) => {
+    const api = await fakeApi(page);
+    await openSearch(page);
+    await runSearch(page, "licuadora");
+    await openRow(page, "Cafetera Gamma");
+    api.decisionStatus = 500;
+    await panel(page).getByRole("button", { name: d.confirm }).click();
+    const error = panel(page).getByTestId("decision-error");
+    await expect(error).toHaveText(interpolate(d.decisionFailed, { reason: t.common.errors.generic }));
+    await expect(rowFor(page, "Cafetera Gamma").getByText(s.match.needsReview)).toBeVisible();
+    await expectAccessible(page);
+
+    // A match that can no longer be reviewed says so.
+    api.decisionStatus = 409;
+    await panel(page).getByRole("button", { name: t.common.retry }).click();
+    await expect(error).toHaveText(interpolate(d.decisionFailed, { reason: d.notReviewable }));
+
+    api.decisionStatus = 200;
+    await panel(page).getByRole("button", { name: t.common.retry }).click();
+    await expect(panel(page).getByTestId("detail-outcome")).toHaveText(d.confirmed);
+    await expect(error).toHaveCount(0);
+    expect(api.decisionBodies.map((b) => b.decision)).toEqual(["accept", "accept", "accept"]);
+  });
+
+  test("loading, history error with retry, empty history and no match", async ({ page }) => {
+    const api = await fakeApi(page);
+    await openSearch(page);
+    await runSearch(page, "licuadora");
+
+    api.historyDelayMs = 1_500;
+    await openRow(page, "Licuadora Alfa");
+    await expect(panel(page).getByRole("status").filter({ hasText: d.historyLoading })).toBeVisible();
+    await expect(panel(page).getByRole("img", { name: /.+/ })).toBeVisible();
+    api.historyDelayMs = 0;
+    // Alfa's match is already accepted: no buttons to press.
+    await expect(panel(page).getByTestId("detail-outcome")).toHaveText(d.confirmed);
+    await expect(panel(page).getByRole("button", { name: d.confirm })).toHaveCount(0);
+
+    api.historyFails = true;
+    await openRow(page, "Cafetera Gamma");
+    const failed = panel(page).getByTestId("history-error");
+    await expect(failed).toHaveText(interpolate(d.historyFailed, { reason: t.common.errors.generic }));
+    await expectAccessible(page);
+    api.historyFails = false;
+    await panel(page).getByRole("button", { name: t.common.retry }).click();
+    await expect(panel(page).getByRole("img", { name: /.+/ })).toBeVisible();
+    await expect(failed).toHaveCount(0);
+
+    await openRow(page, "Batidora Beta");
+    await expect(panel(page).getByTestId("history-empty")).toHaveText(d.historyEmpty);
+    await expect(panel(page).getByTestId("hidden-listings")).toHaveCount(0);
+
+    await openRow(page, "Hervidor Delta");
+    await expect(panel(page).getByTestId("detail-no-match")).toHaveText(d.noMatch);
+    await expect(panel(page).getByRole("meter")).toHaveCount(0);
+    await expect(panel(page).getByRole("button", { name: d.confirm })).toHaveCount(0);
+    await expect(panel(page).getByRole("heading", { name: d.chartHeading })).toHaveCount(0);
+    await expectAccessible(page);
+  });
+
+  test("says how many listings a missing membership hides, over the chart and the empty message", async ({
+    page,
+  }) => {
+    const api = await fakeApi(page);
+    api.hiddenListings = 2;
+    await openSearch(page);
+    await runSearch(page, "licuadora");
+    const hint = interpolate(t.product.hidden, { count: 2 });
+
+    await openRow(page, "Cafetera Gamma");
+    await expect(panel(page).getByTestId("hidden-listings")).toHaveText(hint);
+    await expect(panel(page).getByRole("img", { name: /.+/ })).toBeVisible();
+
+    await openRow(page, "Batidora Beta");
+    await expect(panel(page).getByTestId("history-empty")).toHaveText(d.historyEmpty);
+    await expect(panel(page).getByTestId("hidden-listings")).toHaveText(hint);
+    await expectAccessible(page);
+  });
+});
+
+// Below 1200px the panel is a modal sheet: from the right edge at 768–1199px,
+// from the bottom on phones.
+for (const [layout, viewport, edge] of [
+  ["side sheet at 1024", { width: 1024, height: 768 }, "right"],
+  ["bottom sheet at 390", { width: 390, height: 844 }, "bottom"],
+] as const) {
+  test.describe(`detail panel, ${layout}`, () => {
+    test.use({ viewport });
+
+    test("opens modal; Esc, × and the backdrop close it and focus returns to the row", async ({ page }) => {
+      await fakeApi(page);
+      await openSearch(page);
+      await runSearch(page, "licuadora");
+      await expect(page.locator(".detail-aside")).toHaveCount(0);
+
+      await openRow(page, "Cafetera Gamma");
+      const sheet = panel(page);
+      await expect(sheet).toHaveJSProperty("tagName", "DIALOG");
+      expect(await sheet.evaluate((el) => el.matches(":modal"))).toBe(true);
+      const box = await sheet.boundingBox();
+      expect(box).not.toBeNull();
+      if (box) {
+        if (edge === "right") {
+          expect(Math.round(box.x + box.width)).toBe(viewport.width);
+          expect(Math.round(box.height)).toBe(viewport.height);
+        } else {
+          expect(Math.round(box.y + box.height)).toBe(viewport.height);
+          expect(box.height).toBeLessThanOrEqual(viewport.height * 0.85 + 1);
+        }
+      }
+      await expect(sheet.getByTestId("detail-profit")).toBeVisible();
+      await expectAccessible(page);
+      // Regression: the covered page is marked inert, not only blocked by the
+      // modal, so layout scans and assistive tech skip it.
+      expect(await sheet.evaluate((el) => el.parentElement === document.body)).toBe(true);
+      for (const selector of ["#main", "a.skip-link"]) {
+        const inert = await page.locator(selector).evaluate((el) => el.closest("[inert]") !== null);
+        expect(inert, `${selector} is inert behind the sheet`).toBe(true);
+      }
+
+      await page.keyboard.press("Escape");
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+      await expect(page.locator("body [inert]")).toHaveCount(0);
+      await expect(titleButton(page, GAMMA)).toBeFocused();
+      await expect(titleButton(page, GAMMA)).toHaveAttribute("aria-pressed", "false");
+
+      await openRow(page, "Cafetera Gamma");
+      await panel(page).getByRole("button", { name: d.close }).click();
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+      await expect(titleButton(page, GAMMA)).toBeFocused();
+
+      // The top-left corner is backdrop at both sizes.
+      await openRow(page, "Cafetera Gamma");
+      await page.mouse.click(5, 5);
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+      await expect(titleButton(page, GAMMA)).toBeFocused();
+    });
+
+    test("Confirmar in the sheet updates the badge behind it", async ({ page }) => {
+      const api = await fakeApi(page);
+      await openSearch(page);
+      await runSearch(page, "licuadora");
+      await openRow(page, "Cafetera Gamma");
+      await panel(page).getByRole("button", { name: d.confirm }).click();
+      await expect(panel(page).getByTestId("detail-outcome")).toHaveText(d.confirmed);
+      expect(api.decisionBodies.map((b) => b.decision)).toEqual(["accept"]);
+      await page.keyboard.press("Escape");
+      await expect(rowFor(page, "Cafetera Gamma").getByText(s.match.accepted)).toBeVisible();
+    });
+  });
+}
+
+// Regression: the table needs about 842px, so beside the 400px panel at 1440
+// it hid its ROI column under the panel. Cards show until the table fits.
+for (const [width, layout] of [
+  [1440, "cards"],
+  [1600, "table"],
+] as const) {
+  test(`at ${width} the results show as ${layout} and stay clear of the panel`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await fakeApi(page);
+    await openSearch(page);
+    await runSearch(page, "licuadora");
+    await openRow(page, "Cafetera Gamma");
+    await expect(page.locator(layout === "table" ? ".results-table" : ".result-cards")).toBeVisible();
+    await expect(page.locator(layout === "table" ? ".result-cards" : ".results-table")).toBeHidden();
+    const results = await page.locator(".results").boundingBox();
+    const shown = await page.locator(layout === "table" ? ".results-table" : ".result-cards").boundingBox();
+    const aside = await panel(page).boundingBox();
+    expect(results && shown && aside).toBeTruthy();
+    if (!results || !shown || !aside) return;
+    expect(shown.x + shown.width).toBeLessThanOrEqual(results.x + results.width + 0.5);
+    expect(results.x + results.width).toBeLessThanOrEqual(aside.x);
+  });
+}
+
+test("crossing 1200px while open swaps the sheet and the inline panel, keeping the pick", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await fakeApi(page);
+  await openSearch(page);
+  await runSearch(page, "licuadora");
+  await openRow(page, "Cafetera Gamma");
+  await expect(page.locator("dialog[open]")).toHaveCount(1);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator("dialog")).toHaveCount(0);
+  await expect(page.locator("body [inert]")).toHaveCount(0);
+  await expect(panel(page)).toHaveJSProperty("tagName", "ASIDE");
+  await expect(panel(page).getByRole("heading", { level: 2, name: "Cafetera Gamma" })).toBeVisible();
+  await expect(titleButton(page, GAMMA)).toHaveAttribute("aria-pressed", "true");
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(page.locator("dialog[open]")).toHaveCount(1);
+  await expectAccessible(page);
 });

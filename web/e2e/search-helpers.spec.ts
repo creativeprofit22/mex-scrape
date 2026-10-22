@@ -4,7 +4,15 @@ import { expect, test } from "@playwright/test";
 import { filterRows, NO_FILTERS } from "../src/lib/search/filter";
 import { formatSigned, signClass } from "../src/lib/search/format";
 import { deriveKpis } from "../src/lib/search/kpis";
-import { buildRows, resultKey, type RoiItem, type Row, type SearchResult } from "../src/lib/search/rows";
+import {
+  applyDecisions,
+  buildRows,
+  type MatchDecision,
+  resultKey,
+  type RoiItem,
+  type Row,
+  type SearchResult,
+} from "../src/lib/search/rows";
 import { ariaSort, DEFAULT_SORT, nextSort, sortRows } from "../src/lib/search/sort";
 import { stateFamily, viewState } from "../src/lib/search/status";
 import {
@@ -219,4 +227,40 @@ test("search helpers: view state for every case", () => {
   expect(stateFamily("all-hidden")).toBe("empty");
   expect(stateFamily("partial")).toBe("done");
   expect(stateFamily("refused")).toBe("error");
+});
+
+test("search helpers: saved match decisions update rows without a new search", () => {
+  const rows = buildRows(
+    [
+      result("a", 300, { amazon: { ...AMAZON, match_status: "needs_review" } }),
+      result("b", 100),
+      result("c", 200, { amazon: { ...AMAZON, match_status: "needs_review" } }),
+      result("d", 400, { amazon: AMAZON }),
+    ],
+    new Map([
+      [0, roi(5000)],
+      [2, roi(-2000)],
+      [3, roi(100)],
+    ]),
+  );
+  const decisions = new Map<string, MatchDecision>([
+    ["walmart/a", "accept"],
+    ["walmart/b", "reject"],
+    ["walmart/c", "reject"],
+  ]);
+  const [a, b, c, d] = applyDecisions(rows, decisions);
+  // Accept marks the match accepted and keeps its ROI.
+  expect(a?.result.amazon?.match_status).toBe("accepted");
+  expect(a?.roi?.profit_centavos).toBe(5000);
+  // No match to decide: unchanged.
+  expect(b).toBe(rows[1]);
+  // Reject drops the match and its ROI.
+  expect(c?.result.amazon).toBeNull();
+  expect(c?.roi).toBeUndefined();
+  // No decision: the same object.
+  expect(d).toBe(rows[3]);
+  // The input rows are not mutated.
+  expect(rows[0]?.result.amazon?.match_status).toBe("needs_review");
+  expect(rows[2]?.result.amazon).not.toBeNull();
+  expect(applyDecisions(rows, new Map())).toEqual(rows);
 });

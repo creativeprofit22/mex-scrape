@@ -60,6 +60,11 @@ async function runSearch(page: Page, query: string): Promise<void> {
   }).toPass({ timeout: 60_000 });
 }
 
+// The tie-break steps read results-table rows, which show only when the
+// results column is at least 53rem wide (cards below; about 1550px with the
+// 400px detail panel).
+test.use({ viewport: { width: 1600, height: 900 } });
+
 test.beforeAll(async () => {
   await resetAssistant();
 });

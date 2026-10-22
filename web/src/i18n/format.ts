@@ -24,6 +24,25 @@ export function formatDay(ms: number, lang: Locale): string {
   }).format(new Date(ms));
 }
 
+/** Formats centavos as whole pesos (chart axis ticks: "$1,500"). */
+export function formatWholePesos(centavos: number, lang: Locale): string {
+  return new Intl.NumberFormat(intlTag(lang), {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(centavos / 100);
+}
+
+/** Formats epoch milliseconds as a short day and month, UTC ("24 jul"). */
+export function formatShortDay(ms: number, lang: Locale): string {
+  return new Intl.DateTimeFormat(intlTag(lang), {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(ms));
+}
+
 /** Replaces `{name}` placeholders in a catalog message. */
 export function interpolate(
   message: string,

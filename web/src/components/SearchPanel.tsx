@@ -7,6 +7,7 @@ import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { interpolate } from "@/i18n/format";
 import { api, NETWORK_ERROR, type Schemas } from "@/lib/api/client";
+import { DetailPanel } from "@/components/detail/DetailPanel";
 import { LoadError } from "@/components/LoadError";
 import { FilterChips } from "@/components/search/FilterChips";
 import { KpiStrip } from "@/components/search/KpiStrip";
@@ -18,7 +19,7 @@ import { SearchStatus } from "@/components/search/SearchStatus";
 import { SearchToolbar } from "@/components/search/SearchToolbar";
 import { filterRows, NO_FILTERS, type FilterKey } from "@/lib/search/filter";
 import { deriveKpis } from "@/lib/search/kpis";
-import { buildRows } from "@/lib/search/rows";
+import { applyDecisions, buildRows, type MatchDecision } from "@/lib/search/rows";
 import { DEFAULT_SORT, nextSort, sortRows, type SortKey } from "@/lib/search/sort";
 import { FINISHED_STATUSES, viewState } from "@/lib/search/status";
 import { cleanQuery, NO_COSTS } from "@/lib/search/storage";
@@ -46,17 +47,23 @@ type Failure = { kind: "network" | "other"; message: string };
  * Profit and ROI come from `POST /roi` (the calculator's endpoint) with the
  * saved prep and shipping costs, run once the search has finished. The
  * selected result (`selectedKey`, `retailer/retailer_sku`) lives here so
- * the phase 4 inspector can render beside the results; a new search
- * clears it, a re-sort or filter keeps it (docs/modules/web/search.md).
+ * the detail panel renders it; a new search clears it, a re-sort or
+ * filter keeps it. Match verdicts saved from the panel (`decisions`) are
+ * applied over the results until the next search
+ * (docs/modules/web/detail-panel.md).
  */
 export function SearchPanel({
   lang,
   dict,
+  detail,
+  product,
   common,
   retailers,
 }: {
   lang: Locale;
   dict: Dictionary["search"];
+  detail: Dictionary["detail"];
+  product: Dictionary["product"];
   common: Dictionary["common"];
   retailers: Dictionary["retailers"];
 }) {
@@ -80,6 +87,7 @@ export function SearchPanel({
   const [sort, setSort] = useState(DEFAULT_SORT);
   const [filters, setFilters] = useState(NO_FILTERS);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [decisions, setDecisions] = useState<ReadonlyMap<string, MatchDecision>>(new Map());
   const pollRef = useRef(0);
   const consumedRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +161,7 @@ export function SearchPanel({
       setRoi(new Map());
       setRoiError(null);
       setSelectedKey(null);
+      setDecisions(new Map());
       setPending(true);
       const { data, error, response } = await api.POST("/searches", { body: { query: q } });
       if (pollRef.current !== run) return;
@@ -249,7 +258,15 @@ export function SearchPanel({
     };
   }, [finalResults, prep, shipping, roiAttempt, toSignIn, common.errors, dict.roiFailed]);
 
-  const rows = useMemo(() => buildRows(finalResults ?? [], roi), [finalResults, roi]);
+  const rows = useMemo(
+    () => applyDecisions(buildRows(finalResults ?? [], roi), decisions),
+    [finalResults, roi, decisions],
+  );
+  const selectedRow = useMemo(() => rows.find((r) => r.key === selectedKey) ?? null, [rows, selectedKey]);
+  const closeDetail = useCallback(() => setSelectedKey(null), []);
+  const decided = useCallback((key: string, decision: MatchDecision) => {
+    setDecisions((current) => new Map(current).set(key, decision));
+  }, []);
   const kpis = useMemo(() => (search && finalResults ? deriveKpis(search, rows) : null), [search, finalResults, rows]);
   const shown = useMemo(() => sortRows(filterRows(rows, filters), sort), [rows, filters, sort]);
 
@@ -264,6 +281,7 @@ export function SearchPanel({
   }
 
   const view = { lang, dict, common, retailers };
+  const detailDicts = { lang, detail, product, search: dict, common, retailers };
   return (
     <div className="search-workspace">
       <h1>{dict.heading}</h1>
@@ -306,53 +324,64 @@ export function SearchPanel({
       {search && finalResults && finalResults.length > 0 && !failure && !timedOut ? (
         <>
           <KpiStrip kpis={kpis} lang={lang} dict={dict} none={common.none} />
-          <section className="results-section" aria-labelledby="results-heading">
-            <h2 id="results-heading">{interpolate(dict.resultsHeading, { query: search.query })}</h2>
-            {search.hidden_results > 0 ? (
-              <p className="hint">{interpolate(dict.hidden, { count: search.hidden_results })}</p>
-            ) : null}
-            {roiError ? (
-              <div className="roi-error">
-                <p role="alert" className="error" data-testid="roi-error">
-                  {roiError}
-                </p>
-                <button type="button" className="secondary" onClick={() => setRoiAttempt((n) => n + 1)}>
-                  {dict.roiRetry}
-                </button>
-              </div>
-            ) : null}
-            {rows.length > 0 ? (
-              <>
-                <FilterChips
-                  dict={dict.filters}
-                  filters={filters}
-                  onToggle={(key: FilterKey) => setFilters((f) => ({ ...f, [key]: !f[key] }))}
-                  shown={shown.length}
-                  total={rows.length}
-                />
-                {shown.length > 0 ? (
-                  <div className="results">
-                    <ResultsTable
-                      rows={shown}
-                      view={view}
-                      sort={sort}
-                      onSort={(key: SortKey) => setSort((s) => nextSort(s, key))}
-                      selectedKey={selectedKey}
-                      onSelect={setSelectedKey}
-                    />
-                    <ResultCards rows={shown} view={view} selectedKey={selectedKey} onSelect={setSelectedKey} />
-                  </div>
-                ) : (
-                  <div className="results-empty">
-                    <p>{dict.filters.noMatches}</p>
-                    <button type="button" className="secondary" onClick={() => setFilters(NO_FILTERS)}>
-                      {dict.filters.clear}
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : null}
-          </section>
+          <div className="results-layout">
+            <section className="results-section" aria-labelledby="results-heading">
+              <h2 id="results-heading">{interpolate(dict.resultsHeading, { query: search.query })}</h2>
+              {search.hidden_results > 0 ? (
+                <p className="hint">{interpolate(dict.hidden, { count: search.hidden_results })}</p>
+              ) : null}
+              {roiError ? (
+                <div className="roi-error">
+                  <p role="alert" className="error" data-testid="roi-error">
+                    {roiError}
+                  </p>
+                  <button type="button" className="secondary" onClick={() => setRoiAttempt((n) => n + 1)}>
+                    {dict.roiRetry}
+                  </button>
+                </div>
+              ) : null}
+              {rows.length > 0 ? (
+                <>
+                  <FilterChips
+                    dict={dict.filters}
+                    filters={filters}
+                    onToggle={(key: FilterKey) => setFilters((f) => ({ ...f, [key]: !f[key] }))}
+                    shown={shown.length}
+                    total={rows.length}
+                  />
+                  {shown.length > 0 ? (
+                    <div className="results">
+                      <ResultsTable
+                        rows={shown}
+                        view={view}
+                        sort={sort}
+                        onSort={(key: SortKey) => setSort((s) => nextSort(s, key))}
+                        selectedKey={selectedKey}
+                        onSelect={setSelectedKey}
+                      />
+                      <ResultCards rows={shown} view={view} selectedKey={selectedKey} onSelect={setSelectedKey} />
+                    </div>
+                  ) : (
+                    <div className="results-empty">
+                      <p>{dict.filters.noMatches}</p>
+                      <button type="button" className="secondary" onClick={() => setFilters(NO_FILTERS)}>
+                        {dict.filters.clear}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </section>
+            <DetailPanel
+              row={selectedRow}
+              decision={selectedRow ? decisions.get(selectedRow.key) : undefined}
+              costs={costs}
+              dicts={detailDicts}
+              onClose={closeDetail}
+              onDecided={decided}
+              toSignIn={toSignIn}
+            />
+          </div>
         </>
       ) : null}
     </div>

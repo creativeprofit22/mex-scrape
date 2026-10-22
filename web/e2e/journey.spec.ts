@@ -19,6 +19,11 @@ import {
 // Sam's Club offer is hidden.
 const LIVERPOOL_PROFIT = /350\.00/;
 
+// These steps read the results table, which shows only when the results
+// column is at least 53rem wide (cards below); with the 400px detail panel
+// beside it that takes about 1550px.
+test.use({ viewport: { width: 1600, height: 900 } });
+
 for (const lang of ["es", "en"] as const satisfies readonly Lang[]) {
   test(`sign in → search → product page (${lang}, keyboard only)`, async ({ page }) => {
     const t = catalogs[lang];

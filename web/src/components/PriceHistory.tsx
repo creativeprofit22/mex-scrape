@@ -3,22 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { PriceChart } from "@/components/chart/PriceChart";
+import { PriceTable } from "@/components/chart/PriceTable";
 import { LoadError } from "@/components/LoadError";
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
-import { formatDay, formatMoney, interpolate } from "@/i18n/format";
+import { formatMoney, interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
 import { errorMessage, retailerName } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
 import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 const DAYS = 365;
-const WIDTH = 640;
-const HEIGHT = 240;
-const PAD = 8;
-/** Distinguishable on light and dark backgrounds; series also differ by dash. */
-const COLORS = ["#2563eb", "#d97706", "#059669", "#db2777", "#7c3aed", "#0891b2"];
-const DASHES = ["", "6 3", "2 3", "8 3 2 3", "4 4", "1 2"];
 
 type Loaded = {
   history: Schemas["PriceHistoryResponse"];
@@ -125,45 +121,14 @@ export function PriceHistory({
         <>
           <section aria-labelledby="chart-heading">
             <h2 id="chart-heading">{dict.chartHeading}</h2>
-            <Chart
+            <PriceChart history={loaded.history} lang={lang} dict={dict} retailers={retailers} />
+            <PriceTable
               history={loaded.history}
               lang={lang}
               dict={dict}
+              none={common.none}
               retailers={retailers}
             />
-            <details>
-              <summary>{dict.tableToggle}</summary>
-              {loaded.history.listings.map((listing) => (
-                <div className="table-wrap" key={`${listing.retailer}/${listing.retailer_sku}`}>
-                  <table>
-                    <caption>
-                      {interpolate(dict.tableCaption, {
-                        retailer: retailerName(listing.retailer, retailers),
-                        sku: listing.retailer_sku,
-                      })}
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{dict.day}</th>
-                        <th scope="col">{dict.low}</th>
-                        <th scope="col">{dict.high}</th>
-                        <th scope="col">{dict.inStock}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {listing.points.map((p) => (
-                        <tr key={p.day_ms}>
-                          <th scope="row">{formatDay(p.day_ms, lang)}</th>
-                          <td>{money(p.low_centavos)}</td>
-                          <td>{money(p.high_centavos)}</td>
-                          <td>{p.in_stock ? dict.yes : dict.no}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </details>
           </section>
           <section aria-labelledby="stats-heading">
             <h2 id="stats-heading">{dict.statsHeading}</h2>
@@ -203,91 +168,5 @@ export function PriceHistory({
         </>
       )}
     </>
-  );
-}
-
-/** SVG line chart of each listing's daily low; described by `aria-label`. */
-function Chart({
-  history,
-  lang,
-  dict,
-  retailers,
-}: {
-  history: Schemas["PriceHistoryResponse"];
-  lang: Locale;
-  dict: Dictionary["product"];
-  retailers: Dictionary["retailers"];
-}) {
-  const points = history.listings.flatMap((l) => l.points);
-  const lows = points.map((p) => p.low_centavos);
-  const min = Math.min(...lows);
-  const max = Math.max(...lows);
-  const from = history.since_ms;
-  const to = Math.max(history.as_of_ms, from + 1);
-  const span = max - min || 1;
-  const x = (ms: number) => PAD + ((ms - from) / (to - from)) * (WIDTH - 2 * PAD);
-  const y = (c: number) => HEIGHT - PAD - ((c - min) / span) * (HEIGHT - 2 * PAD);
-  const label = interpolate(dict.chartLabel, {
-    from: formatDay(from, lang),
-    to: formatDay(history.as_of_ms, lang),
-    min: formatMoney(min, lang),
-    max: formatMoney(max, lang),
-  });
-
-  return (
-    <figure className="chart">
-      <svg
-        role="img"
-        aria-label={label}
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        width="100%"
-        preserveAspectRatio="none"
-      >
-        <rect
-          x={0}
-          y={0}
-          width={WIDTH}
-          height={HEIGHT}
-          fill="none"
-          stroke="currentColor"
-          strokeOpacity={0.3}
-        />
-        {history.listings.map((listing, i) => (
-          <polyline
-            key={`${listing.retailer}/${listing.retailer_sku}`}
-            fill="none"
-            stroke={COLORS[i % COLORS.length]}
-            strokeDasharray={DASHES[i % DASHES.length]}
-            strokeWidth={2}
-            vectorEffect="non-scaling-stroke"
-            points={listing.points
-              .map((p) => `${x(p.day_ms).toFixed(1)},${y(p.low_centavos).toFixed(1)}`)
-              .join(" ")}
-          />
-        ))}
-      </svg>
-      <figcaption>
-        <ul className="legend">
-          {history.listings.map((listing, i) => (
-            <li key={`${listing.retailer}/${listing.retailer_sku}`}>
-              <svg width="24" height="8" aria-hidden="true">
-                <line
-                  x1={0}
-                  y1={4}
-                  x2={24}
-                  y2={4}
-                  stroke={COLORS[i % COLORS.length]}
-                  strokeDasharray={DASHES[i % DASHES.length]}
-                  strokeWidth={2}
-                />
-              </svg>
-              {retailerName(listing.retailer, retailers)}
-              {" · "}
-              {listing.retailer_sku}
-            </li>
-          ))}
-        </ul>
-      </figcaption>
-    </figure>
   );
 }

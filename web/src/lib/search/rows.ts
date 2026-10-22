@@ -42,3 +42,30 @@ export function rowRoi(row: Row): number | null {
   if (row.roi?.error) return null;
   return row.roi?.roi_bp ?? null;
 }
+
+/** A match verdict saved from the detail panel (`POST /matches/decisions`). */
+export type MatchDecision = "accept" | "reject";
+
+/**
+ * Applies this session's saved verdicts (keyed by `resultKey`) without
+ * re-running the search: accept marks the match `accepted`; reject drops the
+ * Amazon match and its ROI, so the row reads "Sin coincidencia" and leaves
+ * the profit KPIs, as it will on the next search (ADR 0013). Rows without a
+ * verdict, or without a match to decide, are returned unchanged.
+ */
+export function applyDecisions(
+  rows: readonly Row[],
+  decisions: ReadonlyMap<string, MatchDecision>,
+): Row[] {
+  if (decisions.size === 0) return [...rows];
+  return rows.map((row) => {
+    const decision = decisions.get(row.key);
+    const amazon = row.result.amazon;
+    if (!decision || !amazon) return row;
+    if (decision === "reject") {
+      return { ...row, result: { ...row.result, amazon: null }, roi: undefined };
+    }
+    if (amazon.match_status === "accepted") return row;
+    return { ...row, result: { ...row.result, amazon: { ...amazon, match_status: "accepted" } } };
+  });
+}

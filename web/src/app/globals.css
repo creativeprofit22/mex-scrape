@@ -18,3 +18,4 @@
 @import "../styles/components/chat.css" layer(components);
 @import "../styles/components/shell.css" layer(components);
 @import "../styles/components/search.css" layer(components);
+@import "../styles/components/detail.css" layer(components);

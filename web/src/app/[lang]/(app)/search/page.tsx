@@ -16,6 +16,8 @@ export default async function SearchPage({ params }: PageProps<"/[lang]/search">
       <SearchPanel
         lang={lang}
         dict={dict.search}
+        detail={dict.detail}
+        product={dict.product}
         common={dict.common}
         retailers={dict.retailers}
       />

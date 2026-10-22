@@ -25,8 +25,9 @@ Later layers win whatever the specificity, so a component rule always beats a ba
 | `src/styles/components/tag.css` | `components` | `.tag`, `.tag-gain`, `.tag-warn`, `.tag-loss` |
 | `src/styles/components/feedback.css` | `components` | `.error`, `.hint`, `.load-error` |
 | `src/styles/components/table.css` | `components` | `.table-wrap`, `table`, `caption`, `th`/`td`, `.retailer`, `.facts`, `.outcomes` |
-| `src/styles/components/chart.css` | `components` | `.chart`, `.legend`, `details`/`summary` |
-| `src/styles/components/search.css` | `components` | the search workspace: `.search-toolbar`, `.costs-pill`, `.costs-editor`, `.search-status`, `.store-outcomes`, `.kpi-strip`, `.kpi-tile`, `.filter-bar`, `.chip`, `.results`, `.results-table`, `.sort-button`, `.row-select`, `.result-cards`, `.result-card`, `.skeleton*`, `.recent-searches*`, `.gain`, `.loss` ([search](search.md)) |
+| `src/styles/components/chart.css` | `components` | `.chart`, `.chart__*` (grid, axis, ticks, band, series), `.series-0`…`.series-5`, `.legend`, `details`/`summary` ([detail-panel](detail-panel.md#chart)) |
+| `src/styles/components/search.css` | `components` | the search workspace: `.search-toolbar`, `.costs-pill`, `.costs-editor`, `.search-status`, `.store-outcomes`, `.kpi-strip`, `.kpi-tile`, `.filter-bar`, `.chip`, `.results` (size container `results`), `.results-table`, `.sort-button`, `.row-select`, `.result-cards`, `.result-card`, `.skeleton*`, `.recent-searches*`, `.gain`, `.loss` ([search](search.md)) |
+| `src/styles/components/detail.css` | `components` | `.results-layout`, `.detail-aside`, `.detail-sheet` (side and bottom sheet, `::backdrop`), `.detail*`, `.match-meter*`, `.breakdown*` ([detail-panel](detail-panel.md)) |
 | `src/styles/components/chat.css` | `components` | `.chat-log`, `.chat-user`, `.chat-bot`, `.chat-who`, `.chat-text`, `.suggestions`, `.suggestion` |
 
 The `utilities` layer is declared but empty; put single-purpose override classes there.
@@ -60,7 +61,7 @@ Light values are listed; the dark block in `tokens.css` redefines the same names
 
 Contrast was checked for every pair, light and dark: text ≥ 4.5:1, control borders and focus ≥ 3:1. Re-check both schemes when changing a colour.
 
-The price-history chart (`src/components/PriceHistory.tsx`, `COLORS`) still has its own hex series palette; the charts phase replaces it with tokens.
+The price chart has no colours of its own: its series map to existing tokens (`.series-N` in `chart.css`) and differ by dash too ([detail-panel](detail-panel.md#colours-and-access)).
 
 ## Type roles
 

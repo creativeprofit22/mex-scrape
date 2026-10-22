@@ -349,9 +349,12 @@
   margin: 0;
 }
 
-/* The container picks the layout from its own width: below 40rem (phones,
-   and the 768px viewport beside the sidebar) cards, the table above. The
-   hidden one is display:none, so it leaves the accessibility tree. */
+/* The container picks the layout from its own width: cards below 53rem, the
+   table above. 53rem is the table's measured minimum (about 842px with the
+   14rem product column, es and en), so the table never spills past the sheet
+   or under the detail panel: phones, 768-1099px beside the sidebar, and
+   1200-1599px beside the 400px panel show cards. The hidden one is
+   display:none, so it leaves the accessibility tree. */
 .results {
   container: results / inline-size;
   margin-bottom: var(--space-6);
@@ -364,7 +367,7 @@
   display: none;
 }
 
-@container results (min-width: 40rem) {
+@container results (min-width: 53rem) {
   .results-table {
     display: table;
   }

@@ -1,8 +1,8 @@
 # web: search workspace
 
-The search page (`/[lang]/search`, `src/components/SearchPanel.tsx`) is the app's main workspace: a toolbar with remembered costs, a status line with per-store progress, summary tiles, filter chips, a sortable results table (cards on phones) and recent searches kept in the browser. Styles live in `src/styles/components/search.css`; the visual reasons live in `web/.gg/style-pack.md` §1a, §5 and §10.1.
+The search page (`/[lang]/search`, `src/components/SearchPanel.tsx`) is the app's main workspace: a toolbar with remembered costs, a status line with per-store progress, summary tiles, filter chips, a sortable results table (cards when it does not fit), the [detail panel](detail-panel.md) for the selected result and recent searches kept in the browser. Styles live in `src/styles/components/search.css`; the visual reasons live in `web/.gg/style-pack.md` §1a, §5 and §10.1.
 
-No API changes: `POST /searches`, then `GET /searches/{id}` every 1.5 s for up to 180 s, then `POST /roi` in batches of up to 100 over the matched results.
+No API changes: `POST /searches`, then `GET /searches/{id}` every 1.5 s for up to 180 s, then `POST /roi` in batches of up to 100 over the matched results. The detail panel adds `GET /products/{asin}/price-history` and `POST /matches/decisions`.
 
 ## SearchPanel (orchestrator)
 
@@ -12,9 +12,10 @@ No API changes: `POST /searches`, then `GET /searches/{id}` every 1.5 s for up t
 - **Polling**: each search gets a run number. A newer search (or a retry) bumps it, so an older poll loop stops at its next answer and never overwrites the newer one.
 - **ROI**: one batch effect keyed on the *finished* results. The results only change identity when a search finishes, so sorting and filtering never re-run `/roi`. Prep and shipping come from the saved costs; changing them recalculates.
 - **`?q=` rerun**: `?q=<query>` (from a recent-search link) starts that search once, then `router.replace` goes back to the bare `/[lang]/search`. Browser back therefore never reruns a search, which would cost a POST and scraping. The page wraps the panel in `<Suspense>` because `useSearchParams` needs it on a prerendered page.
-- **Sort, filters, selection**: page state only, never stored. They reset on reload; sort and filters stay the same across new searches, selection is cleared by a new search.
+- **Sort, filters, selection, decisions**: page state only, never stored. They reset on reload; sort and filters stay the same across new searches, selection and this search's match decisions are cleared by a new search.
+- **Decisions**: `decisions: Map<rowKey, "accept" | "reject">`, filled when the panel saves a verdict and applied by `applyDecisions` after `buildRows` ([detail panel](detail-panel.md#decisions-adr-0013)). A reject drops the row's match and profit, so it also leaves the KPIs and the "Solo coincidencias" filter.
 
-## Selection contract (for phase 4)
+## Selection contract
 
 The selected result is **state lifted into `SearchPanel`**, not a URL parameter (decided 2026-10-22):
 
@@ -22,7 +23,7 @@ The selected result is **state lifted into `SearchPanel`**, not a URL parameter 
 - `onSelect(key)`, passed to `ResultsTable` and `ResultCards`.
 - A new search clears it. Re-sorting or filtering keeps it, because it is keyed by result, not position. A filtered-out row stays selected and shows again when the filter is turned off.
 
-The inspector (phase 4) renders as a sibling inside `SearchPanel` and reads the row with that key.
+`DetailPanel` renders as a sibling of the results inside `.results-layout` and reads the row with that key. Closing it sets `selectedKey` to `null` and returns focus to the row's title button (`data-row-key`).
 
 ## Components (`src/components/search/`)
 
@@ -34,9 +35,9 @@ The inspector (phase 4) renders as a sibling inside `SearchPanel` and reads the 
 | `KpiStrip` / `KpiTile` | Best profit (display numeral, gain/loss colour, sign, ↓ on a loss), offers, stores with offers, hidden by membership. Static skeleton tiles while queued or running. |
 | `FilterChips` | "Solo coincidencias", "Ganancia > 0", "Disponibles" as `<button aria-pressed>` with a check glyph when on, and the count ("3 de 5 ofertas") in `role="status"` (`data-testid="result-count"`). |
 | `SortHeader` | The `<th aria-sort>` with a `<button>` inside for price, profit and ROI (argos pattern, `web/.gg/sources.md#sort-header`). |
-| `ResultsTable` | ≥768px. Sticky header, right-aligned tabular numbers, the title is a `button.row-select` (`aria-pressed`) whose `::after` stretches over the row; the store and history links sit above it. |
-| `ResultCards` | <768px. The same rows as cards with labelled `dl` values; no sideways page scroll. Both views sit in one `.results` container and CSS shows one, so a hidden view is out of the accessibility tree. |
-| `ResultParts`, `Signed` | Shared cells: title, store line, match tags, profit and ROI through `formatSigned` / `signClass` (`data-testid` `result-profit`, `result-roi`). |
+| `ResultsTable` | Results container ≥53rem. Sticky header, right-aligned tabular numbers, the title is a `button.row-select` (`aria-pressed`) whose `::after` stretches over the row; the store and history links sit above it. |
+| `ResultCards` | Results container <53rem (phones, 768–1099px beside the sidebar, and 1200–1549px beside the panel). The same rows as cards with labelled `dl` values; no sideways page scroll. Both views sit in one `.results` size container and a container query shows one, so a hidden view is out of the accessibility tree. |
+| `ResultParts`, `Signed` | Shared cells: title (`data-row-key` for focus return), store line, match tags, profit and ROI through `formatSigned` / `signClass` (`data-testid` `result-profit`, `result-roi`). |
 | `SearchSkeleton` | Static placeholder rows from `--sheet-press` (no shimmer; style-pack §2.3 has no ambient motion). `aria-hidden`; the status line carries the state. |
 | `RecentSearches` | Links to `?q=<query>`, newest first. Used in the sidebar slot and, below 768px only, under the toolbar when idle. Renders nothing when empty. |
 
@@ -46,7 +47,7 @@ Tags are outlined (`.tag`): membership (muted), out of stock (`.tag-loss`), need
 
 Pure (no React, type-only imports from `@/lib/api/client`), covered by `e2e/search-helpers.spec.ts`:
 
-- `rows.ts`: `resultKey`, `buildRows(results, roiMap)`, `rowProfit`, `rowRoi`.
+- `rows.ts`: `resultKey`, `buildRows(results, roiMap)`, `applyDecisions(rows, decisions)`, `rowProfit`, `rowRoi`.
 - `sort.ts`: `DEFAULT_SORT` (profit, highest first), `sortRows` (rows without a value go last in both directions, ties keep the API order), `nextSort`, `ariaSort`.
 - `filter.ts`: `filterRows`. `matched` = any Amazon match (accepted or needs review), `profitable` = profit > 0, `inStock` = `availability === "in_stock"`.
 - `kpis.ts`: `deriveKpis`. Always the whole search, whatever the filters.
@@ -77,7 +78,7 @@ Every state has copy (`search.status`) and a next action (`search.next`, buttons
 | `queued` | POST sent, or status `queued` | skeletons |
 | `running` | `running` with no retailers yet | "Consultando tiendas…", skeletons |
 | `running-stores` | `running` with retailers | "Tiendas consultadas (n) · comparando con Amazon…" plus store chips |
-| `done` | finished with results | sort, filter, select |
+| `done` | finished with results | sort, filter, select (opens the detail panel) |
 | `partial` | some stores failed | results plus the failed stores |
 | `failed` | `failed` (`all_retailers_failed`, …) | Reintentar |
 | `refused` | `refused` (gate codes; unknown codes get a generic message) | try other words (no retry) |
@@ -96,5 +97,5 @@ The worker (`crates/worker/src/jobs/search.rs`) fetches every store’s pages fi
 ## Tests
 
 - `e2e/search-helpers.spec.ts` (node only, no browser): sort order with nulls last and stable ties, filters, KPIs, view states and families, storage parsing (malformed JSON, wrong shapes, negative and fractional centavos, long queries), `addRecent` dedupe and cap.
-- `e2e/search.spec.ts` (mocked `/backend/**` with `page.route`, no backend): default profit order and header sorting with `aria-sort`, filter chips and the announced count, selection surviving re-sort and filter, costs validated, saved, sent to `/roi` and prefilling the calculator, recent searches in the sidebar rerunning once (and `?q` removed), malformed storage ignored, `/`, every state, the timeout (`page.clock`), a network drop mid-poll then Reintentar keeping query and costs, a new search mid-poll replacing the old one, browser back from a product without searching again (these three at 1440×900 and 390×844), phone cards without sideways scroll, and axe at each main state.
+- `e2e/search.spec.ts` (mocked `/backend/**` with `page.route`, no backend; 1600×900 so the table fits beside the panel): default profit order and header sorting with `aria-sort`, filter chips and the announced count, selection surviving re-sort and filter, costs validated, saved, sent to `/roi` and prefilling the calculator, recent searches in the sidebar rerunning once (and `?q` removed), malformed storage ignored, `/`, every state, the timeout (`page.clock`), a network drop mid-poll then Reintentar keeping query and costs, a new search mid-poll replacing the old one, browser back from a product without searching again (these three at 1440×900 and 390×844), phone cards without sideways scroll, and axe at each main state. The detail-panel tests are listed in [detail-panel](detail-panel.md#tests).
 - `e2e/journey.spec.ts` (seeded backend) also checks the default profit order.

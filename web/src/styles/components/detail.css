@@ -1,0 +1,373 @@
+/*
+ * Detail panel (docs/modules/web/detail-panel.md, style-pack §3, §4.3).
+ * The inspector beside the results at ≥1200px; below that a native modal
+ * <dialog>: a side sheet at 768–1199px, a bottom sheet under 768px.
+ * Flat --sheet with a 1px --rule edge. Opens without animation (§2.3).
+ * Tokens only.
+ */
+
+/* ---------- Results + inspector grid (≥1200px) ---------- */
+
+@media (min-width: 75rem) {
+  /* The search page grows to fit the 400px inspector beside the table; it
+     is reserved whenever results show, so selecting never reflows the list. */
+  .workspace__content:has(.search-workspace) {
+    max-width: 90rem;
+  }
+
+  .results-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 25rem;
+    align-items: start;
+    gap: var(--space-6);
+  }
+}
+
+/* ---------- Inline inspector ---------- */
+
+.detail-aside {
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100dvh - 2 * var(--space-4));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.detail-aside--empty {
+  color: var(--muted);
+}
+
+.detail-aside--empty p {
+  margin: 0;
+}
+
+/* ---------- Modal sheet (<1200px; see sources#dialog-sync) ---------- */
+
+.detail-sheet {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  max-width: none;
+  max-height: none;
+  background: var(--sheet);
+  color: var(--ink);
+}
+
+.detail-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A veil of the page colour pushes the list back in both schemes. */
+.detail-sheet::backdrop {
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+}
+
+.detail-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5);
+  padding-inline-end: max(var(--space-5), env(safe-area-inset-right, 0px));
+  padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Side sheet: right edge, full height. */
+@media (min-width: 48rem) {
+  .detail-sheet {
+    inset: 0 0 0 auto;
+    width: min(25rem, 100vw);
+    height: 100dvh;
+    border-left: 1px solid var(--rule);
+  }
+}
+
+/* Bottom sheet: phone, thumb reach. */
+@media (max-width: 47.999rem) {
+  .detail-sheet {
+    inset: auto 0 0;
+    width: 100%;
+    max-height: 85dvh;
+    border-top: 1px solid var(--rule);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+}
+
+/* ---------- Content ---------- */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.detail__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.detail__identity {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.detail__store {
+  margin: 0 0 var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+/* Display face (style-pack §4.2: inspector title). */
+.detail__title {
+  margin: 0;
+  font-size: var(--text-section);
+  font-stretch: var(--stretch-display);
+  font-weight: 800;
+  line-height: 1.2;
+  word-spacing: 0.1em;
+  overflow-wrap: anywhere;
+}
+
+.detail__close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--text-section);
+  line-height: 1;
+}
+
+.detail__close-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.75;
+}
+
+.detail__close:active {
+  background: var(--sheet-press);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .detail__close:hover:not(:active) {
+    background: var(--sheet-hover);
+    color: var(--ink);
+  }
+}
+
+.detail__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.detail__price {
+  font-size: var(--text-section);
+  font-weight: 600;
+}
+
+.detail__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule);
+}
+
+.detail__heading {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.detail__section .hint,
+.detail__outcome,
+.detail__empty {
+  margin: 0;
+}
+
+.detail__outcome:focus {
+  outline: none;
+}
+
+.detail__outcome:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.detail__empty {
+  padding: var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+
+.detail__outcome .tag {
+  margin-left: 0;
+}
+
+.detail__actions,
+.detail__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.detail__error .error {
+  flex: 1 1 12rem;
+  margin: 0;
+}
+
+.detail__loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-table);
+}
+
+.detail__chart-skeleton {
+  height: 200px;
+}
+
+/* ---------- Match confidence meter ---------- */
+
+.match-meter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  font-size: var(--text-table);
+}
+
+.match-meter__label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+/* Track and fill drawn from tokens; the track edge is --rule-strong so the
+   bar reads as a gauge (≥3:1). The number beside it carries the value. */
+.match-meter__bar {
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-tag);
+  background: var(--sheet-press);
+}
+
+.match-meter__bar::-webkit-meter-bar {
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-tag);
+  background: var(--sheet-press);
+}
+
+.match-meter__bar::-webkit-meter-optimum-value,
+.match-meter__bar::-webkit-meter-suboptimum-value,
+.match-meter__bar::-webkit-meter-even-less-good-value {
+  background: var(--ink);
+}
+
+.match-meter__bar::-moz-meter-bar {
+  background: var(--ink);
+}
+
+.match-meter__value {
+  font-weight: 600;
+}
+
+/* ---------- Profit breakdown ---------- */
+
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-size: var(--text-table);
+}
+
+.breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-1) 0;
+}
+
+.breakdown dt {
+  color: var(--muted);
+}
+
+.breakdown dd {
+  margin: 0;
+}
+
+.breakdown > .breakdown__total {
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule-strong);
+  font-size: var(--text-ui);
+}
+
+.breakdown__total dt {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- Touch: 44px targets ---------- */
+
+@media (pointer: coarse) {
+  .detail__close {
+    width: var(--control);
+    height: var(--control);
+  }
+}
+
+/* ---------- Forced colours ---------- */
+
+@media (forced-colors: active) {
+  .detail-aside,
+  .detail-sheet {
+    border-color: CanvasText;
+  }
+
+  .detail-sheet::backdrop {
+    background: Canvas;
+    opacity: 0.6;
+  }
+
+  .match-meter__bar {
+    border-color: CanvasText;
+  }
+
+  .match-meter__bar::-webkit-meter-optimum-value,
+  .match-meter__bar::-webkit-meter-suboptimum-value,
+  .match-meter__bar::-webkit-meter-even-less-good-value {
+    background: CanvasText;
+  }
+
+  /* Separate rule: an unknown vendor pseudo would drop the whole list. */
+  .match-meter__bar::-moz-meter-bar {
+    background: CanvasText;
+  }
+}

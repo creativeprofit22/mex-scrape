@@ -31,6 +31,8 @@ export function ResultTitle({
       type="button"
       className="plain-button row-select"
       aria-pressed={selected}
+      // DetailPanel returns focus here when the panel closes.
+      data-row-key={row.key}
       onClick={() => onSelect(selected ? null : row.key)}
     >
       {row.result.title}
