@@ -30,6 +30,7 @@ export function LanguageToggle({
 
   return (
     <Link
+      className="language-toggle"
       href={localizedPath(pathname, target)}
       hrefLang={target}
       lang={target}

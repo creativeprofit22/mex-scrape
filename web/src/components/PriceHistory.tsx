@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { LoadError } from "@/components/LoadError";
@@ -9,8 +8,9 @@ import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { formatDay, formatMoney, interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
-import { currentPath, errorMessage, retailerName, signInPath } from "@/lib/ui";
+import { errorMessage, retailerName } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
+import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 const DAYS = 365;
 const WIDTH = 640;
@@ -42,7 +42,7 @@ export function PriceHistory({
   common: Dictionary["common"];
   retailers: Dictionary["retailers"];
 }) {
-  const router = useRouter();
+  const toSignIn = useSignInRedirect(lang);
   const gate = useRequireOnboarded(lang, common.errors);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // `final` errors (unknown product) get a way back instead of a retry.
@@ -59,7 +59,7 @@ export function PriceHistory({
     ]).then(([history, stats]) => {
       if (!active) return;
       if (history.response.status === 401 || stats.response.status === 401) {
-        router.replace(signInPath(lang, currentPath()));
+        toSignIn();
         return;
       }
       if (history.data && stats.data) {
@@ -80,7 +80,7 @@ export function PriceHistory({
     return () => {
       active = false;
     };
-  }, [asin, lang, router, dict.notFound, common.errors, attempt]);
+  }, [asin, toSignIn, dict.notFound, common.errors, attempt]);
 
   const money = (v: number | null | undefined) =>
     v === null || v === undefined ? common.none : formatMoney(v, lang);

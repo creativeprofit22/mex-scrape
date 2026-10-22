@@ -6,8 +6,18 @@ import { useState, type FormEvent } from "react";
 
 import { localeCookie, localizedPath, type Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
+import { useSession } from "@/components/shell/SessionProvider";
 import { api } from "@/lib/api/client";
-import { errorMessage, nextFromLocation, onboardingPath } from "@/lib/ui";
+import {
+  errorMessage,
+  NEXT_PARAM,
+  nextFromLocation,
+  onboardingPath,
+  safeNextPath,
+  signInPath,
+  signUpPath,
+} from "@/lib/ui";
+import { useLocationSearch } from "@/lib/useLocationSearch";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
@@ -28,10 +38,14 @@ export function AuthForm({
   errors: Dictionary["common"]["errors"];
 }) {
   const router = useRouter();
+  const { refresh } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The switch link keeps the validated `?next=` so the detour survives.
+  const next = safeNextPath(new URLSearchParams(useLocationSearch()).get(NEXT_PARAM)) ?? undefined;
+  const switchHref = mode === "signup" ? signInPath(lang, next) : signUpPath(lang, next);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,6 +62,8 @@ export function AuthForm({
       document.cookie = `${localeCookie}=${locale}; path=/; max-age=${ONE_YEAR_SECONDS}; samesite=lax`;
       const saved = nextFromLocation();
       const next = saved === null ? undefined : localizedPath(saved, locale);
+      // The frame read `/me` while signed out; re-read it for the new session.
+      refresh();
       router.push(
         data.user.onboarded ? (next ?? `/${locale}/search`) : onboardingPath(locale, next),
       );
@@ -115,7 +131,7 @@ export function AuthForm({
         </button>
       </form>
       <p>
-        <Link href={`/${lang}/${signup ? "signin" : "signup"}`}>
+        <Link href={switchHref}>
           {signup ? dict.haveAccount : dict.noAccount}
         </Link>
       </p>

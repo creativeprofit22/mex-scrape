@@ -76,9 +76,11 @@ async function waitForHydration(page: Page, selector: string): Promise<void> {
 }
 
 async function submitSignIn(page: Page): Promise<void> {
-  await page.getByLabel(t.auth.email).fill(account.email);
-  await page.getByLabel(t.auth.password).fill(account.password);
-  await page.getByRole("button", { name: t.auth.signInSubmit }).click();
+  // Next keeps visited pages mounted but hidden, so use the visible form.
+  const form = page.locator("form").filter({ visible: true });
+  await form.getByLabel(t.auth.email).fill(account.email);
+  await form.getByLabel(t.auth.password).fill(account.password);
+  await form.getByRole("button", { name: t.auth.signInSubmit }).click();
 }
 
 test("a lost connection offers a retry instead of loading forever", async ({ page }) => {
@@ -150,4 +152,35 @@ test("the calculator keeps typed values through sign-in", async ({ page }) => {
   }
   await page.getByRole("button", { name: t.calculator.submit }).click();
   await expect(page.getByTestId("calc-profit")).toHaveText(/495\.00/);
+});
+
+test("the sign-in ↔ sign-up switch keeps where the user was going", async ({ page }) => {
+  await fakeApi(page);
+  const product = `/es/products/${ASIN}`;
+  const withNext = (path: string) => `${path}?next=${encodeURIComponent(product)}`;
+  await page.goto(withNext("/es/signin"));
+
+  await page.getByRole("link", { name: t.auth.noAccount, exact: true }).click();
+  await expect(page).toHaveURL(withNext("/es/signup"));
+  await expect(page.getByRole("heading", { name: t.auth.signUpHeading })).toBeVisible();
+
+  await page.getByRole("link", { name: t.auth.haveAccount, exact: true }).click();
+  await expect(page).toHaveURL(withNext("/es/signin"));
+
+  // Back undoes the switch and still remembers the detour.
+  await page.goBack();
+  await expect(page).toHaveURL(withNext("/es/signup"));
+  await page.goBack();
+  await expect(page).toHaveURL(withNext("/es/signin"));
+  await submitSignIn(page);
+  await expect(page).toHaveURL(product);
+});
+
+test("the sign-in ↔ sign-up switch drops an unsafe next", async ({ page }) => {
+  await fakeApi(page);
+  await page.goto(`/es/signin?next=${encodeURIComponent("//evil.example/x")}`);
+  const toSignUp = page.getByRole("link", { name: t.auth.noAccount, exact: true });
+  await expect(toSignUp).toHaveAttribute("href", "/es/signup");
+  await toSignUp.click();
+  await expect(page).toHaveURL("/es/signup");
 });

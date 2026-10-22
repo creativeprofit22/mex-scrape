@@ -16,3 +16,4 @@
 @import "../styles/components/table.css" layer(components);
 @import "../styles/components/chart.css" layer(components);
 @import "../styles/components/chat.css" layer(components);
+@import "../styles/components/shell.css" layer(components);

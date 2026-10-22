@@ -7,7 +7,8 @@ import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { LoadError } from "@/components/LoadError";
 import { api } from "@/lib/api/client";
-import { currentPath, errorMessage, nextFromLocation, signInPath } from "@/lib/ui";
+import { errorMessage, nextFromLocation } from "@/lib/ui";
+import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 /**
  * Store memberships (Costco, Sam's Club); offers needing others are hidden.
@@ -23,6 +24,7 @@ export function OnboardingForm({
   common: Dictionary["common"];
 }) {
   const router = useRouter();
+  const toSignIn = useSignInRedirect(lang);
   const [loaded, setLoaded] = useState(false);
   // A failed load must not show the form: saving its unticked boxes would
   // overwrite memberships the user already has.
@@ -38,7 +40,7 @@ export function OnboardingForm({
     void api.GET("/me").then(({ data, error: failure, response }) => {
       if (!active) return;
       if (response.status === 401) {
-        router.replace(signInPath(lang, currentPath()));
+        toSignIn();
         return;
       }
       if (!data) {
@@ -52,7 +54,7 @@ export function OnboardingForm({
     return () => {
       active = false;
     };
-  }, [lang, router, common.errors, attempt]);
+  }, [toSignIn, common.errors, attempt]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,7 +68,7 @@ export function OnboardingForm({
       return;
     }
     if (response.status === 401) {
-      router.replace(signInPath(lang, currentPath()));
+      toSignIn();
       return;
     }
     setPending(false);

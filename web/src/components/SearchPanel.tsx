@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type { Locale } from "@/i18n/config";
@@ -9,8 +8,9 @@ import type { Dictionary } from "@/i18n/dictionaries";
 import { formatBasisPoints, formatMoney, interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
 import { LoadError } from "@/components/LoadError";
-import { currentPath, errorMessage, pesosToCentavos, retailerName, signInPath } from "@/lib/ui";
+import { errorMessage, pesosToCentavos, retailerName } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
+import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 /** Delay between `GET /searches/{id}` polls. */
 const POLL_MS = 1_500;
@@ -40,7 +40,7 @@ export function SearchPanel({
   common: Dictionary["common"];
   retailers: Dictionary["retailers"];
 }) {
-  const router = useRouter();
+  const toSignIn = useSignInRedirect(lang);
   const gate = useRequireOnboarded(lang, common.errors);
   const [query, setQuery] = useState("");
   const [prep, setPrep] = useState("");
@@ -62,7 +62,7 @@ export function SearchPanel({
 
   function unauthorized(status: number): boolean {
     if (status !== 401) return false;
-    router.replace(signInPath(lang, currentPath()));
+    toSignIn();
     return true;
   }
 
@@ -155,7 +155,7 @@ export function SearchPanel({
     ).then((replies) => {
       if (!active) return;
       if (replies.some(({ response }) => response.status === 401)) {
-        router.replace(signInPath(lang, currentPath()));
+        toSignIn();
         return;
       }
       const next = new Map<number, Roi>();
@@ -173,7 +173,7 @@ export function SearchPanel({
     return () => {
       active = false;
     };
-  }, [results, prepCentavos, shippingCentavos, router, lang, common.errors, dict.roiFailed]);
+  }, [results, prepCentavos, shippingCentavos, toSignIn, common.errors, dict.roiFailed]);
 
   const money = (v: number | null | undefined) =>
     v === null || v === undefined ? common.none : formatMoney(v, lang);

@@ -80,6 +80,11 @@ test("assistant: season prep answer and a confirmed tie-break (es)", async ({ pa
 
   await page.goto("/es/assistant");
   await expect(page.getByRole("heading", { name: t.assistant.heading })).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: t.nav.label })
+      .getByRole("link", { name: t.nav.assistant, exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expectAccessible(page);
 
   // Season prep: the figure in the answer is the tool's 365-day low.

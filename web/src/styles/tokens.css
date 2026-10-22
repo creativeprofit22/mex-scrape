@@ -61,6 +61,10 @@
   --space-7: 32px;
   --space-8: 40px;
 
+  /* App frame (style-pack §4.3) */
+  --sidebar-width: 232px;
+  --tabbar-height: var(--control);
+
   /* Press feedback timing (style-pack §2.3) */
   --press-duration: 60ms;
   --press-ease: ease-out;

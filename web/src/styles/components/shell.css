@@ -1,0 +1,354 @@
+/*
+ * App frame (docs/modules/web/app-shell.md, style-pack §3, §4.3, §7a.4).
+ * Signed-in pages: a 100dvh grid where only .workspace scrolls. Sidebar at
+ * ≥768px; top bar and bottom tabs below. Public pages: a minimal header and
+ * normal document scroll. Opaque surfaces, no motion.
+ */
+
+/* ---------- Signed-in shell ---------- */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.sidebar {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 0;
+  padding: var(--space-5) var(--space-3);
+  padding-inline-start: max(var(--space-3), env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--paper);
+  border-right: 1px solid var(--rule);
+}
+
+.sidebar > .wordmark {
+  margin: 0 var(--space-3) var(--space-4);
+}
+
+.workspace {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* main is focused by the skip link only; it is not a control, so no ring. */
+.workspace:focus,
+.public-frame__main:focus {
+  outline: none;
+}
+
+.workspace__content {
+  max-width: 64rem;
+  padding: var(--space-7) var(--space-6) var(--space-8);
+  padding-inline-end: max(var(--space-6), env(safe-area-inset-right, 0px));
+}
+
+.top-bar,
+.bottom-tabs {
+  display: none;
+}
+
+/* ---------- Wordmark ---------- */
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--control);
+  color: var(--ink);
+  font-size: var(--text-title);
+  font-stretch: var(--stretch-display);
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+}
+
+/* ---------- Sidebar nav: current item = tint + 3px accent bar + weight ---------- */
+/* see sources#shadcn-nav-current */
+
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-list a {
+  display: flex;
+  align-items: center;
+  min-height: var(--control);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.nav-list a[aria-current="page"] {
+  background: var(--tint);
+  color: var(--accent-text);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nav-list a:not([aria-current]):hover {
+    background: var(--sheet-hover);
+  }
+}
+
+/* ---------- Frame links: session links, sign-out and language ---------- */
+
+.sidebar__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding: var(--space-3) var(--space-3) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.account-menu__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.account-menu__links, .sidebar__footer, .top-bar, .public-frame__end)
+  :is(a, .link-button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control);
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.account-menu__links a[aria-current="page"] {
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.account-menu__links, .sidebar__footer, .top-bar, .public-frame__end)
+    :is(a, .link-button):hover {
+    text-decoration: underline;
+  }
+}
+
+/* Same box loaded or not, so the session links never shift the frame. */
+.account-menu--sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: calc(var(--control) * 2 + var(--space-1));
+}
+
+.account-menu--header {
+  min-height: var(--control);
+}
+
+.account-menu__who {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: var(--control);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.account-menu__email {
+  overflow: hidden;
+  font-size: var(--text-table);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__plan {
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+/* ---------- Phone (<768px): top bar + workspace + bottom tabs ---------- */
+
+@media (max-width: 47.999rem) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .top-bar {
+    grid-row: 1;
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-1) var(--space-4);
+    padding-top: max(var(--space-1), env(safe-area-inset-top, 0px));
+    padding-inline: max(var(--space-4), env(safe-area-inset-left, 0px))
+      max(var(--space-4), env(safe-area-inset-right, 0px));
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .workspace {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .workspace__content {
+    padding: var(--space-6) var(--space-4) var(--space-8);
+  }
+
+  .bottom-tabs {
+    grid-row: 3;
+    grid-column: 1;
+    display: block;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+    background: var(--paper);
+    border-top: 1px solid var(--rule);
+  }
+}
+
+/* Bottom tabs: current tab = accent text + weight + 3px top bar. */
+.tab-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tab-list a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tabbar-height);
+  padding: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-table);
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.tab-list a[aria-current="page"] {
+  color: var(--accent-text);
+  font-weight: 600;
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+/* Forced colours drop the bar and tint: underline the current item instead. */
+@media (forced-colors: active) {
+  .nav-list a[aria-current="page"],
+  .tab-list a[aria-current="page"] {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* ---------- Public frame: home, sign-in, sign-up ---------- */
+
+.public-frame__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 var(--space-4);
+  padding: var(--space-1) var(--space-6);
+  padding-top: max(var(--space-1), env(safe-area-inset-top, 0px));
+  /* Line the header up with the centred 64rem content column below. */
+  padding-inline: max(
+      var(--space-6),
+      calc((100% - 64rem) / 2 + var(--space-6)),
+      env(safe-area-inset-left, 0px)
+    )
+    max(
+      var(--space-6),
+      calc((100% - 64rem) / 2 + var(--space-6)),
+      env(safe-area-inset-right, 0px)
+    );
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+
+.public-frame__end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-4);
+}
+
+.public-frame__main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-6) var(--space-8);
+  padding-bottom: max(var(--space-8), env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 40rem) {
+  .public-frame__header {
+    padding-inline: max(var(--space-4), env(safe-area-inset-left, 0px))
+      max(var(--space-4), env(safe-area-inset-right, 0px));
+  }
+
+  .public-frame__main {
+    padding-inline: var(--space-4);
+  }
+}
+
+/* ---------- Account page ---------- */
+
+.account-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
+  margin: 0 0 var(--space-5);
+}
+
+.account-facts dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.account-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Lone inline controls on the account page get a full control height at every
+   pointer (fine floor 32px, touch 44px; methodology 10-affordance). */
+.account-facts .language-toggle,
+.account-actions .link-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control);
+}

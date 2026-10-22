@@ -25,10 +25,17 @@ for (const lang of ["es", "en"] as const satisfies readonly Lang[]) {
     await signIn(page, lang);
     await useLanguage(page, lang);
     await expect(page).toHaveURL(`/${lang}/search`);
+    // The frame marks the current page in the sidebar.
+    await expect(
+      page
+        .getByRole("navigation", { name: t.nav.label })
+        .getByRole("link", { name: t.nav.search, exact: true }),
+    ).toHaveAttribute("aria-current", "page");
     await expectAccessible(page);
 
     // Search with the keyboard; the fixture completer plays the worker.
-    await tabTo(page, page.getByLabel(t.search.label));
+    // (Visible only: Next keeps the other language's page mounted but hidden.)
+    await tabTo(page, page.getByLabel(t.search.label).filter({ visible: true }));
     await page.keyboard.type("taladro");
     await page.keyboard.press("Enter");
     const heading = page.getByRole("heading", {

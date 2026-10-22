@@ -1,11 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Archivo } from "next/font/google";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
 
-import { LanguageToggle } from "@/components/LanguageToggle";
-import { SignOutButton } from "@/components/SignOutButton";
+import { SessionProvider } from "@/components/shell/SessionProvider";
 import { hasLocale, locales } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";
 
@@ -20,6 +17,14 @@ const archivo = Archivo({
   display: "swap",
 });
 
+// viewport-fit=cover makes env(safe-area-inset-*) non-zero, so the bottom tabs
+// can pad past the home indicator. Zoom stays enabled. see sources#next-viewport
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export function generateStaticParams() {
   return locales.map((lang) => ({ lang }));
 }
@@ -33,6 +38,11 @@ export async function generateMetadata({
   return { title: dict.meta.title, description: dict.meta.description };
 }
 
+/**
+ * Document root. The frame (`(app)` shell or `(public)` header) comes from the
+ * route group's layout; each renders `<main id="main">` for the skip link.
+ * The session lives here so both frames share one `GET /me`.
+ */
 export default async function RootLayout({
   children,
   params,
@@ -40,7 +50,6 @@ export default async function RootLayout({
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
   const dict = await getDictionary(lang);
-  const other = lang === "es" ? "en" : "es";
 
   return (
     <html lang={lang} className={archivo.variable}>
@@ -48,49 +57,7 @@ export default async function RootLayout({
         <a className="skip-link" href="#main">
           {dict.nav.skipToContent}
         </a>
-        <header className="site-header">
-          <nav aria-label={dict.nav.label}>
-            <ul>
-              <li>
-                <Link href={`/${lang}`}>{dict.nav.home}</Link>
-              </li>
-              <li>
-                <Link href={`/${lang}/search`}>{dict.nav.search}</Link>
-              </li>
-              <li>
-                <Link href={`/${lang}/calculator`}>{dict.nav.calculator}</Link>
-              </li>
-              <li>
-                <Link href={`/${lang}/assistant`}>{dict.nav.assistant}</Link>
-              </li>
-              <li>
-                <Link href={`/${lang}/signin`}>{dict.nav.signIn}</Link>
-              </li>
-              <li>
-                <SignOutButton lang={lang} label={dict.nav.signOut} />
-              </li>
-            </ul>
-          </nav>
-          <Suspense
-            fallback={
-              <a
-                href={`/${other}`}
-                hrefLang={other}
-                lang={other}
-                title={dict.nav.switchLanguageLabel}
-              >
-                {dict.nav.switchLanguage}
-              </a>
-            }
-          >
-            <LanguageToggle
-              target={other}
-              label={dict.nav.switchLanguage}
-              title={dict.nav.switchLanguageLabel}
-            />
-          </Suspense>
-        </header>
-        <main id="main">{children}</main>
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );

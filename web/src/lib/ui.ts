@@ -36,6 +36,11 @@ export function signInPath(lang: Locale, next?: string): string {
   return withNext(`/${lang}/signin`, next);
 }
 
+/** Sign-up page for `lang`; afterwards the user goes to `next` (an in-app path). */
+export function signUpPath(lang: Locale, next?: string): string {
+  return withNext(`/${lang}/signup`, next);
+}
+
 /** Onboarding page for `lang`; afterwards the user goes to `next` (an in-app path). */
 export function onboardingPath(lang: Locale, next?: string): string {
   return withNext(`/${lang}/onboarding`, next);

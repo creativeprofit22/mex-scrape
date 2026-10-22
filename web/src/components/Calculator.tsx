@@ -1,13 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type FormEvent } from "react";
 
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { formatBasisPoints, formatMoney } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
-import { currentPath, errorMessage, pesosToCentavos, signInPath } from "@/lib/ui";
+import { errorMessage, pesosToCentavos } from "@/lib/ui";
+import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 type Field =
   | "sellPrice"
@@ -103,7 +103,7 @@ export function Calculator({
   dict: Dictionary["calculator"];
   common: Dictionary["common"];
 }) {
-  const router = useRouter();
+  const toSignIn = useSignInRedirect(lang);
   // Values typed before a sign-in detour come back from sessionStorage; the
   // server snapshot is null so hydration matches, then the draft shows.
   const draft = useSyncExternalStore(subscribeNever, readDraft, () => null);
@@ -164,7 +164,7 @@ export function Calculator({
     setPending(false);
     if (response.status === 401) {
       saveDraft(values);
-      router.replace(signInPath(lang, currentPath()));
+      toSignIn();
       return;
     }
     const first = data?.results[0];

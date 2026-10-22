@@ -1,15 +1,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useSession } from "@/components/shell/SessionProvider";
 import type { Locale } from "@/i18n/config";
 import { api } from "@/lib/api/client";
-import {
-  currentPath,
-  errorMessage,
-  onboardingPath,
-  signInPath,
-  type CommonErrors,
-} from "@/lib/ui";
+import { currentPath, errorMessage, onboardingPath, type CommonErrors } from "@/lib/ui";
+import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 /** Outcome of the onboarding check for a gated page. */
 export type OnboardedGate =
@@ -27,10 +23,13 @@ type GateState =
  * user to sign-in and a not-yet-onboarded one to `/[lang]/onboarding`, so
  * membership offers are never hidden from someone who was never asked. Both
  * come back to this page afterwards. Stays `loading` while redirecting; a
- * failed check is an `error` with a `retry`, not a pass.
+ * failed check is an `error` with a `retry`, not a pass. A 401 and a retry
+ * also re-read the frame's session, so its links match what the page learnt.
  */
 export function useRequireOnboarded(lang: Locale, errors: CommonErrors): OnboardedGate {
   const router = useRouter();
+  const { refresh } = useSession();
+  const toSignIn = useSignInRedirect(lang);
   const [gate, setGate] = useState<GateState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
 
@@ -39,7 +38,7 @@ export function useRequireOnboarded(lang: Locale, errors: CommonErrors): Onboard
     void api.GET("/me").then(({ data, error, response }) => {
       if (!active) return;
       if (response.status === 401) {
-        router.replace(signInPath(lang, currentPath()));
+        toSignIn();
         return;
       }
       if (!data) {
@@ -58,7 +57,7 @@ export function useRequireOnboarded(lang: Locale, errors: CommonErrors): Onboard
     return () => {
       active = false;
     };
-  }, [lang, router, errors, attempt]);
+  }, [lang, router, toSignIn, errors, attempt]);
 
   if (gate.status === "error") {
     return {
@@ -66,6 +65,7 @@ export function useRequireOnboarded(lang: Locale, errors: CommonErrors): Onboard
       retry: () => {
         setGate({ status: "loading" });
         setAttempt((n) => n + 1);
+        refresh();
       },
     };
   }

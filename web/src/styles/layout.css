@@ -1,43 +1,4 @@
-/* Page frame and flow helpers. The app shell (sidebar, toolbar) is a later phase. */
-
-main {
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: var(--space-7) var(--space-6) var(--space-8);
-}
-
-.site-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-2) var(--space-6);
-  background: var(--paper);
-  border-bottom: 1px solid var(--rule);
-}
-
-.site-header ul {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.site-header a {
-  color: var(--ink);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .site-header a:hover {
-    text-decoration: underline;
-  }
-}
+/* Flow helpers. The frames (app shell, public header) live in components/shell.css. */
 
 .stack {
   display: flex;
@@ -67,25 +28,13 @@ main {
   gap: var(--space-4);
 }
 
-/* Touch: 44px targets for nav, the language switch and lone links (§10 rule 1). */
-@media (pointer: coarse) {
-  .site-header a,
-  .actions > a:not(.button),
-  main > p > a:only-child {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: var(--control);
-    min-width: var(--control);
-  }
-}
-
-@media (max-width: 40rem) {
-  main {
-    padding: var(--space-6) var(--space-4) var(--space-8);
-  }
-
-  .site-header {
-    padding: var(--space-2) var(--space-4);
-  }
+/* Lone links get a full control-height target at every pointer (§10 rule 1:
+   fine floor 32px, touch 44px), like the frame links. */
+.actions > a:not(.button),
+:is(.workspace__content, .public-frame__main) > p > a:only-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control);
+  min-width: var(--control);
 }

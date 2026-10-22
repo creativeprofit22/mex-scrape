@@ -18,9 +18,10 @@ Later layers win whatever the specificity, so a component rule always beats a ba
 | --- | --- | --- |
 | `src/styles/tokens.css` | `tokens` | every custom property, light and dark; the only file with colour values |
 | `src/styles/base.css` | `base` | reset, `body`, type roles, links, the focus ring, `.skip-link`, forced-colours focus |
-| `src/styles/layout.css` | `layout` | `main`, `.site-header`, `.stack`, `.actions`, coarse-pointer link targets |
+| `src/styles/layout.css` | `layout` | `.stack`, `.actions`, lone-link targets |
 | `src/styles/components/button.css` | `components` | primary `button` / `.button`, `button.secondary`, `.link-button`, disabled, reduced motion |
 | `src/styles/components/field.css` | `components` | `.field` wrapper, `input`, `textarea`, `fieldset`, `legend`, `.check` |
+| `src/styles/components/shell.css` | `components` | `.app-shell`, `.sidebar`, `.workspace`, `.top-bar`, `.bottom-tabs`, `.nav-list`, `.tab-list`, `.wordmark`, `.account-menu*`, `.public-frame*`, `.account-facts` ([app-shell](app-shell.md)) |
 | `src/styles/components/tag.css` | `components` | `.tag`, `.tag-gain`, `.tag-warn` |
 | `src/styles/components/feedback.css` | `components` | `.error`, `.hint`, `.load-error` |
 | `src/styles/components/table.css` | `components` | `.table-wrap`, `table`, `caption`, `th`/`td`, `.retailer`, `.facts`, `.outcomes` |
@@ -53,6 +54,7 @@ Light values are listed; the dark block in `tokens.css` redefines the same names
 | `--radius`, `--radius-tag` | 6px, 4px | controls and panels, tags |
 | `--control`, `--row` | 44px, 56px | control height, table row height |
 | `--space-1` … `--space-8` | 4 … 40px | spacing scale |
+| `--sidebar-width`, `--tabbar-height` | 232px, `--control` | app-shell sidebar column, phone tab height |
 | `--press-duration`, `--press-ease` | 60ms, `ease-out` | press feedback |
 
 Contrast was checked for every pair, light and dark: text ≥ 4.5:1, control borders and focus ≥ 3:1. Re-check both schemes when changing a colour.
@@ -80,7 +82,7 @@ Archivo comes from `next/font/google` in `src/app/[lang]/layout.tsx` (`axes: ["w
 - **Tag** (`.tag`, `.tag-gain`, `.tag-warn`): outlined, no fill, label type; muted by default.
 - **Feedback**: `.error` (`--loss`, hidden when empty), `.hint` (muted), `.load-error` (the `LoadError` panel: sheet, hairline, error text plus retry).
 - **Focus ring**: `:focus-visible` is a 2px `--accent-text` outline with a 2px offset (field controls offset 3px to clear the wrapper border); `Highlight` in forced colours.
-- **Touch**: under `(pointer: coarse)`, header links, lone links and the link button get a 44px minimum.
+- **Targets**: frame links, lone links (`.actions > a`, a link alone in a paragraph) and the account page's language toggle and sign-out are `--control` (44px) tall at every pointer; the link button elsewhere gets 44px under `(pointer: coarse)`.
 
 Keep the class names the e2e tests select on: `.chat`, `.chat-bot`, `.chat-text`, `details`, `tbody tr`.
 

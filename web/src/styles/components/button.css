@@ -91,18 +91,6 @@ button.secondary:active:not(:disabled) {
   }
 }
 
-.site-header .link-button {
-  color: var(--ink);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .site-header .link-button:hover {
-    text-decoration: underline;
-  }
-}
-
 @media (pointer: coarse) {
   .link-button {
     display: inline-flex;

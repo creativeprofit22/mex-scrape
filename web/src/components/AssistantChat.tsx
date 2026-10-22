@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import type { Locale } from "@/i18n/config";
@@ -9,8 +8,9 @@ import { interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
 import { buildChatHistory, MAX_MESSAGE_CHARS, type ChatMessage } from "@/lib/chatHistory";
 import { LoadError } from "@/components/LoadError";
-import { currentPath, errorMessage, retailerName, signInPath } from "@/lib/ui";
+import { errorMessage, retailerName } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
+import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 type Message = ChatMessage;
 type Suggestion = Schemas["MatchSuggestionResponse"];
@@ -33,7 +33,7 @@ export function AssistantChat({
   common: Dictionary["common"];
   retailers: Dictionary["retailers"];
 }) {
-  const router = useRouter();
+  const toSignIn = useSignInRedirect(lang);
   const gate = useRequireOnboarded(lang, common.errors);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
@@ -47,7 +47,7 @@ export function AssistantChat({
 
   function unauthorized(status: number): boolean {
     if (status !== 401) return false;
-    router.replace(signInPath(lang, currentPath()));
+    toSignIn();
     return true;
   }
 

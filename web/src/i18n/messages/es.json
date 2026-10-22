@@ -5,10 +5,11 @@
   },
   "nav": {
     "label": "Navegación principal",
-    "home": "Inicio",
+    "wordmark": "mex-scrape",
     "search": "Buscar",
     "calculator": "Calculadora",
     "assistant": "Asistente",
+    "account": "Cuenta",
     "signIn": "Iniciar sesión",
     "signUp": "Crear cuenta",
     "signOut": "Cerrar sesión",
@@ -205,6 +206,17 @@
       "suggestion_mismatch": "La propuesta no coincide con el producto. Recarga e inténtalo de nuevo."
     },
     "newChat": "Nueva conversación"
+  },
+  "account": {
+    "heading": "Tu cuenta",
+    "signedOutIntro": "Inicia sesión para ver tu cuenta, o crea una nueva.",
+    "email": "Correo",
+    "plan": "Plan",
+    "language": "Idioma",
+    "plans": {
+      "free": "Gratis",
+      "pro": "Pro"
+    }
   },
   "retailers": {
     "bodega_aurrera": "Bodega Aurrera",

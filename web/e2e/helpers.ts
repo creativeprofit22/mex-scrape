@@ -64,8 +64,8 @@ export async function signIn(page: Page, lang: Lang, who = account): Promise<voi
 }
 
 /**
- * Makes `lang` the current language with the header toggle (keyboard),
- * which also saves it on the account.
+ * Makes `lang` the current language with the frame's toggle (keyboard; the
+ * sidebar footer at desktop sizes), which also saves it on the account.
  */
 export async function useLanguage(page: Page, lang: Lang): Promise<void> {
   const current = new URL(page.url()).pathname.split("/")[1] as Lang;
