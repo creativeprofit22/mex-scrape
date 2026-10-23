@@ -1,4 +1,4 @@
-/* Ruled tables, definition lists and outcome lists. */
+/* Ruled tables. */
 
 .table-wrap {
   overflow-x: auto;
@@ -43,28 +43,4 @@ tbody th {
 
 tbody tr:last-child > * {
   border-bottom: 0;
-}
-
-.retailer {
-  display: block;
-  color: var(--muted);
-  font-size: var(--text-label);
-}
-
-.facts {
-  display: grid;
-  grid-template-columns: max-content auto;
-  gap: var(--space-1) var(--space-4);
-}
-
-.facts dt {
-  color: var(--muted);
-}
-
-.facts dd {
-  margin: 0;
-}
-
-.outcomes {
-  padding-left: var(--space-5);
 }

@@ -1,4 +1,38 @@
-/* Assistant conversation log and suggestion cards. */
+/*
+ * Assistant (docs/modules/web/pages.md): intro, the conversation with
+ * proposal cards inline after the reply that made them, and a composer
+ * pinned to the bottom of the workspace. Only .workspace scrolls (the shell
+ * is 100dvh and the bottom tabs sit in their own row with the safe area),
+ * so the sticky composer never hides behind the phone tabs. Tokens only;
+ * no motion.
+ */
+
+/* The assistant fills the workspace height so the composer starts at the
+   bottom even with an empty log; no bottom padding under the composer. A
+   kept-mounted, hidden assistant (display: none) does not match. */
+.workspace__content:has(> .assistant:not([style*="none"])) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding-bottom: 0;
+}
+
+.assistant {
+  container-type: inline-size;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.assistant__intro {
+  max-width: 40rem;
+}
+
+.chat {
+  flex: 1 0 auto;
+}
+
+/* ---------- Log ---------- */
 
 .chat-log {
   display: flex;
@@ -9,21 +43,23 @@
   list-style: none;
 }
 
-.chat-log li {
+.chat-log > .chat-user,
+.chat-log > .chat-bot {
+  max-width: min(85%, 44rem);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--sheet);
 }
 
+/* Who spoke is in the label and the side, not in colour alone. */
 .chat-user {
   align-self: flex-end;
-  max-width: 85%;
+  background: var(--paper);
 }
 
 .chat-bot {
   align-self: flex-start;
-  max-width: 85%;
+  background: var(--sheet);
 }
 
 .chat-who {
@@ -38,19 +74,114 @@
 .chat-text {
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.suggestions {
+.chat-empty,
+.chat-status:empty {
+  margin: 0;
+}
+
+/* ---------- Proposal cards (match pieces, see match.css) ---------- */
+
+.chat-cards {
+  align-self: stretch;
+  max-width: 44rem;
+}
+
+.chat-cards__heading {
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.chat-cards__list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.suggestion {
-  padding: var(--space-3) var(--space-4);
+.suggestion-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--sheet);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--sheet);
+}
+
+.suggestion-card__ids {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-table);
+  overflow-wrap: anywhere;
+}
+
+.suggestion-card__reason {
+  margin: 0;
+}
+
+.suggestion-card__reason .tag {
+  margin-left: 0;
+}
+
+.suggestion-card .error:empty {
+  display: none;
+}
+
+/* ---------- Composer ---------- */
+
+.chat-composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  margin-top: auto;
+  padding-block: var(--space-3);
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+}
+
+.chat-composer__label {
+  font-weight: 500;
+}
+
+.chat-composer__field > textarea {
+  min-height: 4rem;
+  max-height: 40dvh;
+}
+
+.chat-composer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Wide workspaces: buttons beside the box. */
+@container (min-width: 36rem) {
+  .chat-composer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .chat-composer__label {
+    grid-column: 1 / -1;
+  }
+}
+
+/* No tabs under the composer from 768px up, so it clears the safe area. */
+@media (min-width: 48rem) {
+  .chat-composer {
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom, 0px));
+  }
 }

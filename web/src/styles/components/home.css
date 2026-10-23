@@ -1,0 +1,52 @@
+/*
+ * Signed-out home: one intro line, three numbered steps on sheet cards, then
+ * the sign-up / sign-in actions. No hero, no slogans (style-pack §1a, §6).
+ */
+
+.home__intro {
+  max-width: 60ch;
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-section);
+}
+
+.home > h2 {
+  margin-top: 0;
+}
+
+.home-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  list-style: none;
+}
+
+.home-steps__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+/* The step number is a display numeral, like the KPI figures. */
+.home-steps__number {
+  font-size: var(--text-title);
+  font-stretch: var(--stretch-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.home-steps__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.home-steps__body {
+  margin: 0;
+  color: var(--muted);
+}

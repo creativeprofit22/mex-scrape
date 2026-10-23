@@ -1,0 +1,118 @@
+/*
+ * Match pieces shared by the detail panel and the assistant's suggestion
+ * cards (docs/modules/web/detail-panel.md): identity, decision buttons,
+ * outcome line and the confidence meter. Tokens only.
+ */
+
+.match__identity {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.match__store {
+  margin: 0 0 var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+/* Display face (style-pack §4.2: inspector title). */
+.match__title {
+  margin: 0;
+  font-size: var(--text-section);
+  font-stretch: var(--stretch-display);
+  font-weight: 800;
+  line-height: 1.2;
+  word-spacing: 0.1em;
+  overflow-wrap: anywhere;
+}
+
+.match__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.match__outcome {
+  margin: 0;
+}
+
+.match__outcome:focus {
+  outline: none;
+}
+
+.match__outcome:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.match__outcome .tag {
+  margin-left: 0;
+}
+
+/* ---------- Match confidence meter ---------- */
+
+.match-meter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  font-size: var(--text-table);
+}
+
+.match-meter__label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+/* Track and fill drawn from tokens; the track edge is --rule-strong so the
+   bar reads as a gauge (≥3:1). The number beside it carries the value. */
+.match-meter__bar {
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-tag);
+  background: var(--sheet-press);
+}
+
+.match-meter__bar::-webkit-meter-bar {
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-tag);
+  background: var(--sheet-press);
+}
+
+.match-meter__bar::-webkit-meter-optimum-value,
+.match-meter__bar::-webkit-meter-suboptimum-value,
+.match-meter__bar::-webkit-meter-even-less-good-value {
+  background: var(--ink);
+}
+
+.match-meter__bar::-moz-meter-bar {
+  background: var(--ink);
+}
+
+.match-meter__value {
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .match-meter__bar {
+    border-color: CanvasText;
+  }
+
+  .match-meter__bar::-webkit-meter-optimum-value,
+  .match-meter__bar::-webkit-meter-suboptimum-value,
+  .match-meter__bar::-webkit-meter-even-less-good-value {
+    background: CanvasText;
+  }
+
+  /* Separate rule: an unknown vendor pseudo would drop the whole list. */
+  .match-meter__bar::-moz-meter-bar {
+    background: CanvasText;
+  }
+}

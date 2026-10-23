@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { AssistantChat } from "@/components/AssistantChat";
+import { AssistantChat } from "@/components/assistant/AssistantChat";
 import { hasLocale } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";
 

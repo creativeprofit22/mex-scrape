@@ -47,6 +47,30 @@
   resize: vertical;
 }
 
+/* TextField: label, field, hint and error in one column (see sources#field-ids). */
+.text-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.text-field > label {
+  font-weight: 500;
+}
+
+.text-field > .hint,
+.text-field > .field-error {
+  margin: 0;
+  font-size: var(--text-table);
+}
+
+/* The message names the problem; colour only repeats it. */
+.field-error {
+  color: var(--loss);
+  font-weight: 500;
+}
+
 /* Inputs never shrink below 16px: iOS zooms on smaller text */
 input,
 textarea {
@@ -72,22 +96,62 @@ legend {
   text-transform: uppercase;
 }
 
-.stack label.check {
+/*
+ * Membership rows (onboarding): the whole row is the label around a native
+ * checkbox, so the hit area is the row and the box still shows the state.
+ * Checked adds tint, accent text and weight on top of the tick, never colour
+ * alone.
+ */
+.check-group {
+  gap: var(--space-2);
+}
+
+.check-row {
+  display: flex;
   flex-direction: row;
   align-items: center;
-  gap: var(--space-2);
-  font-weight: 400;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--press-duration) var(--press-ease);
 }
 
-.check input {
-  width: 18px;
-  height: 18px;
+/* Beats the column layout .stack gives every label. */
+.stack label.check-row {
+  flex-direction: row;
+  gap: var(--space-3);
+  font-weight: 500;
+}
+
+/* Unscoped so any check-row gets it; the .stack alias outranks the weight above. */
+label.check-row:has(:checked),
+.stack label.check-row:has(:checked) {
+  border-color: var(--accent-text);
+  background: var(--tint);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.check-row:not(:has(:checked)):active {
+  background: var(--sheet-press);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .check-row:not(:has(:checked)):hover:not(:active) {
+    background: var(--sheet-hover);
+  }
+}
+
+.check-row input {
+  flex: none;
+  width: 20px;
+  height: 20px;
   margin: 0;
   accent-color: var(--accent);
-}
-
-@media (pointer: coarse) {
-  .stack label.check {
-    min-height: var(--control);
-  }
 }

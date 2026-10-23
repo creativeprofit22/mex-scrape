@@ -20,15 +20,20 @@ Later layers win whatever the specificity, so a component rule always beats a ba
 | `src/styles/base.css` | `base` | reset, `body`, type roles, links, the focus ring, `.skip-link`, forced-colours focus |
 | `src/styles/layout.css` | `layout` | `.stack`, `.actions`, lone-link targets |
 | `src/styles/components/button.css` | `components` | primary `button` / `.button`, `button.secondary`, `.link-button`, `.plain-button` (opts out of all three for self-drawn controls), disabled, reduced motion |
-| `src/styles/components/field.css` | `components` | `.field` wrapper, `input`, `textarea`, `fieldset`, `legend`, `.check` |
+| `src/styles/components/field.css` | `components` | `.field` wrapper (red border from `[aria-invalid]`), `.text-field`, `.field-error`, `input`, `textarea`, `fieldset`, `legend`, `.check-group`, `.check-row` (large rows around a native checkbox) |
 | `src/styles/components/shell.css` | `components` | `.app-shell`, `.sidebar`, `.workspace`, `.top-bar`, `.bottom-tabs`, `.nav-list`, `.tab-list`, `.wordmark`, `.account-menu*`, `.public-frame*`, `.account-facts` ([app-shell](app-shell.md)) |
 | `src/styles/components/tag.css` | `components` | `.tag`, `.tag-gain`, `.tag-warn`, `.tag-loss` |
 | `src/styles/components/feedback.css` | `components` | `.error`, `.hint`, `.load-error` |
-| `src/styles/components/table.css` | `components` | `.table-wrap`, `table`, `caption`, `th`/`td`, `.retailer`, `.facts`, `.outcomes` |
+| `src/styles/components/card.css` | `components` | `.card` (centred form card), `.card__switch` ([pages](pages.md#shared-pieces)) |
+| `src/styles/components/table.css` | `components` | `.table-wrap`, `table`, `caption`, `th`/`td` |
 | `src/styles/components/chart.css` | `components` | `.chart`, `.chart__*` (grid, axis, ticks, band, series), `.series-0`…`.series-5`, `.legend`, `details`/`summary` ([detail-panel](detail-panel.md#chart)) |
 | `src/styles/components/search.css` | `components` | the search workspace: `.search-toolbar`, `.costs-pill`, `.costs-editor`, `.search-status`, `.store-outcomes`, `.kpi-strip`, `.kpi-tile`, `.filter-bar`, `.chip`, `.results` (size container `results`), `.results-table`, `.sort-button`, `.row-select`, `.result-cards`, `.result-card`, `.skeleton*`, `.recent-searches*`, `.gain`, `.loss` ([search](search.md)) |
-| `src/styles/components/detail.css` | `components` | `.results-layout`, `.detail-aside`, `.detail-sheet` (side and bottom sheet, `::backdrop`), `.detail*`, `.match-meter*`, `.breakdown*` ([detail-panel](detail-panel.md)) |
-| `src/styles/components/chat.css` | `components` | `.chat-log`, `.chat-user`, `.chat-bot`, `.chat-who`, `.chat-text`, `.suggestions`, `.suggestion` |
+| `src/styles/components/detail.css` | `components` | `.results-layout`, `.detail-aside`, `.detail-sheet` (side and bottom sheet, `::backdrop`), `.detail*`, `.breakdown*` (also used by the calculator) ([detail-panel](detail-panel.md)) |
+| `src/styles/components/match.css` | `components` | `.match__identity`, `.match__store`, `.match__title`, `.match__actions`, `.match__outcome`, `.match-meter*`: the match pieces shared by the detail panel and the assistant ([detail-panel](detail-panel.md#shared-match-pieces)) |
+| `src/styles/components/chat.css` | `components` | the assistant: `.assistant`, `.chat`, `.chat-log`, `.chat-user`, `.chat-bot`, `.chat-who`, `.chat-text`, `.chat-status`, `.chat-cards*`, `.suggestion-card*`, the sticky `.chat-composer*` ([pages](pages.md)) |
+| `src/styles/components/calculator.css` | `components` | `.calculator` (size container), `.calculator__layout`, the sticky `.calculator__result`, `.calculator__numeral` ([pages](pages.md)) |
+| `src/styles/components/product.css` | `components` | `.product-header*`, `.back-link`, `.stats-table`, `.product__loading`, `.product__skeleton*`, `.product__empty` |
+| `src/styles/components/home.css` | `components` | `.home`, `.home__intro`, `.home-steps*` |
 
 The `utilities` layer is declared but empty; put single-purpose override classes there.
 
@@ -80,10 +85,11 @@ Archivo comes from `next/font/google` in `src/app/[lang]/layout.tsx` (`axes: ["w
 - **Primary button** (`button`, `.button`): accent fill, `--on-accent` text, a 2px `--accent-edge` bottom edge; `:active` moves it 1px down onto a 1px edge in `--press-duration`. Hover only under `(hover: hover) and (pointer: fine)`. `prefers-reduced-motion: reduce` drops the travel and keeps the colour change. Min height `--control`.
 - **Secondary** (`button.secondary`): sheet fill, `--rule-strong` border, ink text.
 - **Link button** (`.link-button`): a button that looks like a link (sign out); 44px on coarse pointers.
-- **Field**: wrap each text input or textarea in `<span className="field">` inside its `<label>`, so the label association stays implicit. The wrapper draws the border; `[aria-invalid="true"]` inside it turns the border `--loss`. Inputs are 16px (no iOS zoom) and 44px tall. Checkboxes use `label.check` and `accent-color`.
+- **Field**: prefer `TextField` (`src/components/form/`): label, `.field`, input, hint and inline error, with every id from one `useId()` so `aria-describedby` names the hint and the current error ([pages](pages.md#shared-pieces)). Hand-written fields wrap the input or textarea in `<span className="field">`; the wrapper draws the border and `[aria-invalid="true"]` inside it turns the border `--loss`. Inputs are 16px (no iOS zoom) and 44px tall. Checkboxes stay native, inside a `label.check-row` (at least 56px; tint plus weight when checked).
 - **Tag** (`.tag`, `.tag-gain`, `.tag-warn`, `.tag-loss`): outlined, no fill, label type; muted by default.
 - **Plain button** (`.plain-button`): no fill, border or push edge; for controls that draw themselves (filter chips, sort headers, row titles, the costs pill). Keeps the focus ring.
-- **Feedback**: `.error` (`--loss`, hidden when empty), `.hint` (muted), `.load-error` (the `LoadError` panel: sheet, hairline, error text plus retry).
+- **Feedback**: `.error` (`--loss`, hidden when empty), `.hint` (muted), `.field-error` (a field's inline error), `.load-error` (the `LoadError` panel in `src/components/feedback/`: sheet, hairline, error text plus retry).
+- **Card** (`.card`): the centred form card for sign-in, sign-up and onboarding; sheet, hairline, `--radius`, no shadow.
 - **Focus ring**: `:focus-visible` is a 2px `--accent-text` outline with a 2px offset (field controls offset 3px to clear the wrapper border); `Highlight` in forced colours.
 - **Targets**: frame links, lone links (`.actions > a`, a link alone in a paragraph) and the account page's language toggle and sign-out are `--control` (44px) tall at every pointer; the link button elsewhere gets 44px under `(pointer: coarse)`.
 

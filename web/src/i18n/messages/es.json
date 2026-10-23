@@ -29,16 +29,26 @@
       "network": "No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo."
     }
   },
-  "health": {
-    "checking": "Comprobando API…",
-    "online": "API en línea",
-    "offline": "API no disponible"
-  },
   "home": {
     "heading": "mex-scrape",
-    "intro": "Compara precios de tiendas mexicanas con Amazon.com.mx, calcula tu ROI y consulta el historial de precios.",
-    "start": "Empezar a buscar",
-    "createAccount": "Crear una cuenta"
+    "intro": "Encuentra productos de tiendas mexicanas que puedes revender con ganancia en Amazon.com.mx.",
+    "stepsHeading": "Cómo funciona",
+    "steps": {
+      "search": {
+        "title": "Busca un producto",
+        "body": "Escribe un nombre o código y ve las ofertas de tiendas mexicanas."
+      },
+      "compare": {
+        "title": "Compara con Amazon",
+        "body": "Mira el precio del mismo producto en Amazon.com.mx y cómo ha cambiado."
+      },
+      "profit": {
+        "title": "Calcula tu ganancia",
+        "body": "Resta comisiones, envío y preparación para ver tu ganancia y tu ROI."
+      }
+    },
+    "createAccount": "Crear cuenta",
+    "signIn": "Iniciar sesión"
   },
   "auth": {
     "signUpHeading": "Crear cuenta",
@@ -55,7 +65,9 @@
       "invalidEmail": "Escribe un correo electrónico válido.",
       "weakPassword": "La contraseña debe tener entre 8 y 128 caracteres.",
       "emailTaken": "Ya existe una cuenta con ese correo.",
-      "invalidCredentials": "Correo o contraseña incorrectos."
+      "invalidCredentials": "No se pudo iniciar sesión: el correo o la contraseña no coinciden. Revísalos e inténtalo de nuevo.",
+      "signUpCheck": "No se pudo crear la cuenta. Corrige el campo marcado e inténtalo de nuevo.",
+      "signInCheck": "No se pudo iniciar sesión. Corrige el campo marcado e inténtalo de nuevo."
     }
   },
   "onboarding": {
@@ -64,8 +76,10 @@
     "legend": "Membresías",
     "costco": "Costco",
     "sams": "Sam's Club",
+    "hint": "Puedes cambiarlas después en Cuenta.",
     "submit": "Guardar y continuar",
-    "saving": "Guardando…"
+    "saving": "Guardando…",
+    "loadFailed": "No se pudieron cargar tus membresías. {reason}"
   },
   "search": {
     "heading": "Buscar productos",
@@ -200,9 +214,13 @@
     "windowDays": "{days} días",
     "observations": "Observaciones",
     "empty": "Aún no hay historial para este producto.",
-    "notFound": "No encontramos ese producto.",
+    "notFound": "No encontramos ese producto. Revisa el ASIN o vuelve a buscar.",
     "backToSearch": "Volver a buscar",
-    "hidden": "{count} productos de tiendas ocultos porque requieren una membresía que no tienes."
+    "hidden": "{count} productos de tiendas ocultos porque requieren una membresía que no tienes.",
+    "rerunRecent": "Repetir «{query}»",
+    "asinLabel": "ASIN",
+    "loading": "Cargando el historial de precios…",
+    "loadFailed": "No se pudo cargar el historial de precios. {reason}"
   },
   "detail": {
     "empty": "Elige un resultado para ver su detalle: la coincidencia en Amazon, la ganancia y el historial de precios.",
@@ -254,9 +272,21 @@
     "totalCost": "Costo total por unidad",
     "fixedPerUnit": "Costos fijos por unidad",
     "errors": {
-      "invalidAmount": "Revisa los montos: deben ser números positivos.",
-      "zero_units": "Indica las unidades al mes para repartir los costos fijos.",
-      "overflow": "Los montos son demasiado grandes."
+      "invalidAmount": "No se pudo calcular: los montos deben ser números positivos. Revísalos e inténtalo de nuevo.",
+      "zero_units": "No se pudo calcular: indica las unidades al mes para repartir los costos fijos.",
+      "overflow": "No se pudo calcular: los montos son demasiado grandes. Usa cantidades menores.",
+      "invalidFields": "No se pudo calcular. Revisa los campos marcados.",
+      "failed": "No se pudo calcular. {reason}"
+    },
+    "pricesLegend": "Precios",
+    "costsLegend": "Tus costos",
+    "resultEmpty": "Escribe los precios y pulsa Calcular para ver la ganancia y el ROI.",
+    "calculating": "Calculando…",
+    "fieldErrors": {
+      "required": "Escribe un monto.",
+      "amount": "Usa solo números con hasta 2 decimales, por ejemplo 1299.50.",
+      "units": "Usa un número entero, por ejemplo 30.",
+      "zeroUnits": "Indica cuántas unidades vendes al mes."
     }
   },
   "assistant": {
@@ -272,12 +302,13 @@
     "thinking": "El asistente está pensando…",
     "empty": "Aún no hay mensajes.",
     "suggestionsHeading": "Coincidencias propuestas",
-    "suggestion": "{retailer} · {sku} → {asin}",
+    "suggestion": "SKU {sku} → ASIN {asin}",
     "proposeAccept": "Propone aceptar",
     "proposeReject": "Propone rechazar",
     "reason": "Motivo: {reason}",
     "confirm": "Confirmar",
     "dismiss": "Descartar",
+    "saving": "Guardando…",
     "confirmLabel": "Confirmar la propuesta para {title}",
     "dismissLabel": "Descartar la propuesta para {title}",
     "accepted": "Coincidencia aceptada. Ya se refleja en tus búsquedas.",

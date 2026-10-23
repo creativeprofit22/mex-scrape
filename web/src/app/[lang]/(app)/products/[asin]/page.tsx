@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-import { PriceHistory } from "@/components/PriceHistory";
+import { PriceHistory } from "@/components/product/PriceHistory";
 import { hasLocale } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { SignOutButton } from "@/components/SignOutButton";
+import { SignOutButton } from "@/components/shell/SignOutButton";
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { activeNavItem, planLabel } from "@/lib/nav";

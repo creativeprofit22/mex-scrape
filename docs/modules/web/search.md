@@ -1,6 +1,6 @@
 # web: search workspace
 
-The search page (`/[lang]/search`, `src/components/SearchPanel.tsx`) is the app's main workspace: a toolbar with remembered costs, a status line with per-store progress, summary tiles, filter chips, a sortable results table (cards when it does not fit), the [detail panel](detail-panel.md) for the selected result and recent searches kept in the browser. Styles live in `src/styles/components/search.css`; the visual reasons live in `web/.gg/style-pack.md` §1a, §5 and §10.1.
+The search page (`/[lang]/search`, `src/components/search/SearchPanel.tsx`) is the app's main workspace: a toolbar with remembered costs, a status line with per-store progress, summary tiles, filter chips, a sortable results table (cards when it does not fit), the [detail panel](detail-panel.md) for the selected result and recent searches kept in the browser. Styles live in `src/styles/components/search.css`; the visual reasons live in `web/.gg/style-pack.md` §1a, §5 and §10.1.
 
 No API changes: `POST /searches`, then `GET /searches/{id}` every 1.5 s for up to 180 s, then `POST /roi` in batches of up to 100 over the matched results. The detail panel adds `GET /products/{asin}/price-history` and `POST /matches/decisions`.
 

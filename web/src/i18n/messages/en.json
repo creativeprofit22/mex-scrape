@@ -29,16 +29,26 @@
       "network": "Can't reach the server. Check your connection and try again."
     }
   },
-  "health": {
-    "checking": "Checking API…",
-    "online": "API online",
-    "offline": "API unavailable"
-  },
   "home": {
     "heading": "mex-scrape",
-    "intro": "Compare Mexican store prices with Amazon.com.mx, work out your ROI and check price history.",
-    "start": "Start searching",
-    "createAccount": "Create an account"
+    "intro": "Find products from Mexican stores that you can resell at a profit on Amazon.com.mx.",
+    "stepsHeading": "How it works",
+    "steps": {
+      "search": {
+        "title": "Search for a product",
+        "body": "Type a name or code and see offers from Mexican stores."
+      },
+      "compare": {
+        "title": "Compare with Amazon",
+        "body": "See the same product’s price on Amazon.com.mx and how it has changed."
+      },
+      "profit": {
+        "title": "Work out your profit",
+        "body": "Take off fees, shipping and prep to see your profit and ROI."
+      }
+    },
+    "createAccount": "Create account",
+    "signIn": "Sign in"
   },
   "auth": {
     "signUpHeading": "Sign up",
@@ -55,7 +65,9 @@
       "invalidEmail": "Enter a valid email address.",
       "weakPassword": "The password must be between 8 and 128 characters.",
       "emailTaken": "An account with that email already exists.",
-      "invalidCredentials": "Wrong email or password."
+      "invalidCredentials": "Could not sign in: the email or password does not match. Check them and try again.",
+      "signUpCheck": "Could not create the account. Fix the marked field and try again.",
+      "signInCheck": "Could not sign in. Fix the marked field and try again."
     }
   },
   "onboarding": {
@@ -64,8 +76,10 @@
     "legend": "Memberships",
     "costco": "Costco",
     "sams": "Sam's Club",
+    "hint": "You can change them later in Account.",
     "submit": "Save and continue",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "loadFailed": "Could not load your memberships. {reason}"
   },
   "search": {
     "heading": "Search products",
@@ -200,9 +214,13 @@
     "windowDays": "{days} days",
     "observations": "Observations",
     "empty": "No price history for this product yet.",
-    "notFound": "We could not find that product.",
+    "notFound": "We could not find that product. Check the ASIN or search again.",
     "backToSearch": "Back to search",
-    "hidden": "{count} store listings hidden because they need a membership you do not hold."
+    "hidden": "{count} store listings hidden because they need a membership you do not hold.",
+    "rerunRecent": "Rerun “{query}”",
+    "asinLabel": "ASIN",
+    "loading": "Loading the price history…",
+    "loadFailed": "Could not load the price history. {reason}"
   },
   "detail": {
     "empty": "Pick a result to see its details: the Amazon match, the profit and the price history.",
@@ -254,9 +272,21 @@
     "totalCost": "Total cost per unit",
     "fixedPerUnit": "Fixed costs per unit",
     "errors": {
-      "invalidAmount": "Check the amounts: they must be positive numbers.",
-      "zero_units": "Enter units per month to spread the fixed costs.",
-      "overflow": "The amounts are too large."
+      "invalidAmount": "Could not calculate: the amounts must be positive numbers. Check them and try again.",
+      "zero_units": "Could not calculate: enter units per month to spread the fixed costs.",
+      "overflow": "Could not calculate: the amounts are too large. Use smaller amounts.",
+      "invalidFields": "Could not calculate. Check the marked fields.",
+      "failed": "Could not calculate. {reason}"
+    },
+    "pricesLegend": "Prices",
+    "costsLegend": "Your costs",
+    "resultEmpty": "Enter the prices and press Calculate to see the profit and ROI.",
+    "calculating": "Calculating…",
+    "fieldErrors": {
+      "required": "Enter an amount.",
+      "amount": "Use numbers only, with up to 2 decimals, for example 1299.50.",
+      "units": "Use a whole number, for example 30.",
+      "zeroUnits": "Enter how many units you sell per month."
     }
   },
   "assistant": {
@@ -272,12 +302,13 @@
     "thinking": "The assistant is thinking…",
     "empty": "No messages yet.",
     "suggestionsHeading": "Proposed matches",
-    "suggestion": "{retailer} · {sku} → {asin}",
+    "suggestion": "SKU {sku} → ASIN {asin}",
     "proposeAccept": "Proposes accepting",
     "proposeReject": "Proposes rejecting",
     "reason": "Reason: {reason}",
     "confirm": "Confirm",
     "dismiss": "Dismiss",
+    "saving": "Saving…",
     "confirmLabel": "Confirm the proposal for {title}",
     "dismissLabel": "Dismiss the proposal for {title}",
     "accepted": "Match accepted. Your searches now show it.",

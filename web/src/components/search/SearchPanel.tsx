@@ -8,7 +8,7 @@ import type { Dictionary } from "@/i18n/dictionaries";
 import { interpolate } from "@/i18n/format";
 import { api, NETWORK_ERROR, type Schemas } from "@/lib/api/client";
 import { DetailPanel } from "@/components/detail/DetailPanel";
-import { LoadError } from "@/components/LoadError";
+import { LoadError } from "@/components/feedback/LoadError";
 import { FilterChips } from "@/components/search/FilterChips";
 import { KpiStrip } from "@/components/search/KpiStrip";
 import { RecentSearches, RERUN_PARAM } from "@/components/search/RecentSearches";

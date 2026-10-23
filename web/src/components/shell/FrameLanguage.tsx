@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { LanguageToggle } from "@/components/LanguageToggle";
+import { LanguageToggle } from "@/components/shell/LanguageToggle";
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 

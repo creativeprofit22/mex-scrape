@@ -106,6 +106,17 @@ No React and no DOM, covered by `e2e/chart-helpers.spec.ts` (Node only).
 - Grid lines are `--rule`, the axis `--rule-strong`, tick labels `--muted` with tabular figures, and the band `--gain` at 12 %.
 - Forced colours: lines and labels use `CanvasText`, the grid `GrayText`, and the band becomes a dashed `Highlight` outline. The dashes still tell the series apart.
 
+## Shared match pieces
+
+`src/components/match/` holds the parts the panel shares with the assistant's suggestion cards ([pages](pages.md)); their styles are in `src/styles/components/match.css`.
+
+- `MatchIdentity`: the store label and the display title. The heading level is a prop (`h2` in the panel, `h3` in a card).
+- `MatchDecisionButtons`: Confirmar / Descartar, with the visible and accessible labels passed in. While saving, both are disabled and the pressed one shows the saving label with `aria-busy`. The buttons only call back, so each caller decides what a press sends: the panel saves both decisions, and the assistant's Descartar sends nothing.
+- `MatchOutcome`: the focusable `role="status"` line that takes focus once a decision is saved.
+- `MatchMeter`: the confidence meter described above.
+
+`DetailContent` uses all four, so the panel's markup, `data-testid`s and behaviour are unchanged.
+
 ## Layout around the panel
 
 The results container (`.results`, `container: results / inline-size`) shows the table only when the container is at least 53rem wide, the table's measured minimum. Below that it shows cards. With the 400px panel beside it, the table therefore needs about 1550px of viewport; at 1200–1549px the list shows cards next to the panel. The user chose this over dropping columns on 2026-10-22. Specs that read table rows use a 1600×900 viewport.

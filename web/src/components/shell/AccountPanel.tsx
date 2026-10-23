@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 
-import { LoadError } from "@/components/LoadError";
+import { LoadError } from "@/components/feedback/LoadError";
 import { useSession } from "@/components/shell/SessionProvider";
-import { SignOutButton } from "@/components/SignOutButton";
+import { SignOutButton } from "@/components/shell/SignOutButton";
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { planLabel } from "@/lib/nav";

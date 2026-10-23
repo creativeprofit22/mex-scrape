@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { AccountPanel } from "@/components/AccountPanel";
+import { AccountPanel } from "@/components/shell/AccountPanel";
 import { FrameLanguage } from "@/components/shell/FrameLanguage";
 import { hasLocale } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";

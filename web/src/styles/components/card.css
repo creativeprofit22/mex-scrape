@@ -1,0 +1,56 @@
+/*
+ * Centred form card: sign-in, sign-up and onboarding. Sheet on paper with a
+ * hairline, no shadow (style-pack §2.1 materials).
+ */
+
+.card {
+  width: 100%;
+  max-width: 28rem;
+  margin-inline: auto;
+  padding: var(--space-6);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.card > h1 {
+  margin-top: 0;
+}
+
+.card > :last-child {
+  margin-bottom: 0;
+}
+
+/* The card is the width limit; its form fills it. */
+.card .stack {
+  max-width: none;
+  align-items: stretch;
+}
+
+.card .stack > button {
+  align-self: flex-start;
+}
+
+.card__switch {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+/* A lone link, not prose: give it a full-height hit area. */
+.card__switch > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control);
+}
+
+/* A card on its own in the workspace (onboarding) sits a little lower. */
+.workspace__content > .card {
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 30rem) {
+  .card {
+    padding: var(--space-4);
+  }
+}

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { OnboardingForm } from "@/components/OnboardingForm";
+import { OnboardingForm } from "@/components/auth/OnboardingForm";
 import { hasLocale } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";
 

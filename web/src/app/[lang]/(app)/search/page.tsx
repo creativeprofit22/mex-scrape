@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-import { SearchPanel } from "@/components/SearchPanel";
+import { SearchPanel } from "@/components/search/SearchPanel";
 import { hasLocale } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";
 

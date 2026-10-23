@@ -5,14 +5,18 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
-import { LoadError } from "@/components/LoadError";
+import { LoadError } from "@/components/feedback/LoadError";
+import { useSession } from "@/components/shell/SessionProvider";
 import { api } from "@/lib/api/client";
+import { interpolate } from "@/i18n/format";
 import { errorMessage, nextFromLocation } from "@/lib/ui";
 import { useSignInRedirect } from "@/lib/useSignInRedirect";
 
 /**
- * Store memberships (Costco, Sam's Club); offers needing others are hidden.
- * Saving goes on to `?next=` (the page that sent the user here) or search.
+ * Store memberships (Costco, Sam's Club) in a centred card inside the app
+ * frame; offers needing others are hidden. Each membership is a full-width
+ * row around a native checkbox. Saving re-reads the frame session, then goes
+ * on to `?next=` (the page that sent the user here) or search.
  */
 export function OnboardingForm({
   lang,
@@ -24,6 +28,7 @@ export function OnboardingForm({
   common: Dictionary["common"];
 }) {
   const router = useRouter();
+  const { refresh } = useSession();
   const toSignIn = useSignInRedirect(lang);
   const [loaded, setLoaded] = useState(false);
   // A failed load must not show the form: saving its unticked boxes would
@@ -44,7 +49,11 @@ export function OnboardingForm({
         return;
       }
       if (!data) {
-        setLoadError(errorMessage(response.status, failure?.error, common.errors));
+        setLoadError(
+          interpolate(dict.loadFailed, {
+            reason: errorMessage(response.status, failure?.error, common.errors),
+          }),
+        );
         return;
       }
       setCostco(data.has_costco);
@@ -54,7 +63,7 @@ export function OnboardingForm({
     return () => {
       active = false;
     };
-  }, [toSignIn, common.errors, attempt]);
+  }, [toSignIn, dict.loadFailed, common.errors, attempt]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,6 +73,9 @@ export function OnboardingForm({
       body: { has_costco: costco, has_sams: sams },
     });
     if (data) {
+      // The frame still holds `onboarded: false`; re-read it so home's
+      // redirect doesn't send the user back here.
+      refresh();
       router.push(nextFromLocation() ?? `/${lang}/search`);
       return;
     }
@@ -77,27 +89,37 @@ export function OnboardingForm({
 
   if (loadError) {
     return (
-      <LoadError
-        message={loadError}
-        retryLabel={common.retry}
-        onRetry={() => {
-          setLoadError(null);
-          setAttempt((n) => n + 1);
-        }}
-      />
+      <div className="card">
+        <h1>{dict.heading}</h1>
+        <LoadError
+          message={loadError}
+          retryLabel={common.retry}
+          onRetry={() => {
+            setLoadError(null);
+            setAttempt((n) => n + 1);
+          }}
+        />
+      </div>
     );
   }
   if (!loaded) {
-    return <p role="status">{common.loading}</p>;
+    return (
+      <div className="card" aria-busy="true">
+        <h1>{dict.heading}</h1>
+        <p role="status" className="hint">
+          {common.loading}
+        </p>
+      </div>
+    );
   }
   return (
-    <>
+    <div className="card">
       <h1>{dict.heading}</h1>
       <p>{dict.intro}</p>
       <form className="stack" onSubmit={submit}>
-        <fieldset>
+        <fieldset className="check-group">
           <legend>{dict.legend}</legend>
-          <label className="check">
+          <label className="check-row">
             <input
               type="checkbox"
               name="has_costco"
@@ -106,7 +128,7 @@ export function OnboardingForm({
             />
             {dict.costco}
           </label>
-          <label className="check">
+          <label className="check-row">
             <input
               type="checkbox"
               name="has_sams"
@@ -116,6 +138,7 @@ export function OnboardingForm({
             {dict.sams}
           </label>
         </fieldset>
+        <p className="hint">{dict.hint}</p>
         <p role="alert" className="error">
           {error}
         </p>
@@ -123,6 +146,6 @@ export function OnboardingForm({
           {pending ? dict.saving : dict.submit}
         </button>
       </form>
-    </>
+    </div>
   );
 }

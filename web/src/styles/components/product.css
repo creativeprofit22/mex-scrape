@@ -1,0 +1,90 @@
+/*
+ * Product page (docs/modules/web/pages.md): header with the way back and
+ * the ASIN, static loading skeleton, and right-aligned stats figures.
+ * Tokens only; no motion.
+ */
+
+.product-header {
+  margin-bottom: var(--space-5);
+}
+
+.product-header__back {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin-bottom: var(--space-3);
+}
+
+.product-header__back a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+/* The arrow is decoration: generated content with empty alt text. */
+.back-link::before {
+  content: "←" / "";
+  margin-right: var(--space-1);
+}
+
+.product-header h1 {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.product-header__asin {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--muted);
+}
+
+.product-header__asin .t-num {
+  color: var(--ink);
+}
+
+.product__empty {
+  max-width: 40rem;
+  color: var(--muted);
+}
+
+/* ---------- Loading (static; reuses .skeleton from search.css) ---------- */
+
+.product__loading > p {
+  color: var(--muted);
+}
+
+.product__skeleton {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.product__skeleton-chart {
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  min-height: 10rem;
+  max-height: 20rem;
+}
+
+/* ---------- Stats: figures right-aligned in tabular numerals ---------- */
+
+.stats-table td,
+.stats-table thead th:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats-table tbody th {
+  white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+  .product-header__back a {
+    min-height: var(--control);
+  }
+}

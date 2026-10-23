@@ -13,7 +13,10 @@ import type { MatchDecision, Row } from "@/lib/search/rows";
 import type { Costs } from "@/lib/search/storage";
 import { errorMessage, retailerName } from "@/lib/ui";
 
-import { MatchMeter } from "./MatchMeter";
+import { MatchDecisionButtons } from "@/components/match/MatchDecisionButtons";
+import { MatchIdentity } from "@/components/match/MatchIdentity";
+import { MatchMeter } from "@/components/match/MatchMeter";
+import { MatchOutcome } from "@/components/match/MatchOutcome";
 import { ProfitBreakdown } from "./ProfitBreakdown";
 import { useDetailHistory } from "./useDetailHistory";
 
@@ -122,12 +125,7 @@ export function DetailContent({
   return (
     <div className="detail">
       <header className="detail__header">
-        <div className="detail__identity">
-          <p className="detail__store">{store}</p>
-          <h2 id={titleId} className="detail__title">
-            {result.title}
-          </h2>
-        </div>
+        <MatchIdentity store={store} title={result.title} titleId={titleId} level="h2" />
         <button type="button" className="plain-button detail__close" aria-label={detail.close} onClick={onClose}>
           <svg className="detail__close-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
             <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
@@ -149,9 +147,9 @@ export function DetailContent({
       </p>
 
       {decision === "reject" ? (
-        <p ref={outcomeRef} tabIndex={-1} role="status" className="detail__outcome" data-testid="detail-outcome">
+        <MatchOutcome ref={outcomeRef} testId="detail-outcome">
           {detail.rejected}
-        </p>
+        </MatchOutcome>
       ) : !amazon ? (
         <p className="detail__empty" data-testid="detail-no-match">
           {detail.noMatch}
@@ -169,37 +167,18 @@ export function DetailContent({
               valueLabel={detail.confidenceValue}
             />
             {amazon.match_status === "accepted" ? (
-              <p
-                ref={outcomeRef}
-                tabIndex={-1}
-                role="status"
-                className="detail__outcome"
-                data-testid="detail-outcome"
-              >
+              <MatchOutcome ref={outcomeRef} testId="detail-outcome">
                 <span className="tag tag-gain">{detail.confirmed}</span>
-              </p>
+              </MatchOutcome>
             ) : (
               <>
                 <p className="hint">{detail.reviewHint}</p>
-                <div className="detail__actions">
-                  <button
-                    type="button"
-                    disabled={saving !== null}
-                    aria-busy={saving === "accept" || undefined}
-                    onClick={() => void decide("accept")}
-                  >
-                    {saving === "accept" ? detail.saving : detail.confirm}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={saving !== null}
-                    aria-busy={saving === "reject" || undefined}
-                    onClick={() => void decide("reject")}
-                  >
-                    {saving === "reject" ? detail.saving : detail.reject}
-                  </button>
-                </div>
+                <MatchDecisionButtons
+                  saving={saving}
+                  onConfirm={() => void decide("accept")}
+                  onReject={() => void decide("reject")}
+                  labels={{ confirm: detail.confirm, reject: detail.reject, saving: detail.saving }}
+                />
                 {failed ? (
                   <div className="detail__error">
                     <p role="alert" className="error" data-testid="decision-error">

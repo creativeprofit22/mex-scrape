@@ -1,0 +1,125 @@
+/*
+ * Calculator (docs/modules/web/pages.md): inputs beside a sticky result
+ * when the calculator itself is at least 44rem wide (a container query,
+ * since the workspace width depends on the sidebar), stacked below that.
+ * Tokens only; no motion.
+ */
+
+.calculator {
+  container-type: inline-size;
+}
+
+.calculator__intro {
+  max-width: 40rem;
+}
+
+.calculator__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+  margin-top: var(--space-5);
+}
+
+.calculator__form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.calculator__form fieldset {
+  gap: var(--space-4);
+}
+
+.calculator__form > .error {
+  margin: 0;
+}
+
+/* ---------- Result panel ---------- */
+
+.calculator__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.calculator__heading {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.calculator__figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.calculator__figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.calculator__label {
+  color: var(--muted);
+  font-size: var(--text-table);
+}
+
+/* Display numeral (style-pack §4.2); the sign and ↓ carry gain/loss too. */
+.calculator__numeral {
+  margin: 0;
+  font-size: var(--text-kpi);
+  font-stretch: var(--stretch-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.calculator__numeral > span {
+  font-weight: inherit;
+}
+
+.calculator__roi-value {
+  margin: 0;
+  font-size: var(--text-section);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.calculator__empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* ---------- Two columns ---------- */
+
+@container (min-width: 44rem) {
+  .calculator__layout {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
+
+  /* Sticks inside .workspace, the only scroller; no ancestor clips it. */
+  .calculator__result {
+    position: sticky;
+    top: var(--space-4);
+  }
+}
+
+@media (forced-colors: active) {
+  .calculator__result {
+    border-color: CanvasText;
+  }
+}

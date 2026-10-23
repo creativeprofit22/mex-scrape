@@ -13,9 +13,14 @@
 @import "../styles/components/field.css" layer(components);
 @import "../styles/components/tag.css" layer(components);
 @import "../styles/components/feedback.css" layer(components);
+@import "../styles/components/card.css" layer(components);
 @import "../styles/components/table.css" layer(components);
 @import "../styles/components/chart.css" layer(components);
 @import "../styles/components/chat.css" layer(components);
 @import "../styles/components/shell.css" layer(components);
 @import "../styles/components/search.css" layer(components);
+@import "../styles/components/match.css" layer(components);
 @import "../styles/components/detail.css" layer(components);
+@import "../styles/components/calculator.css" layer(components);
+@import "../styles/components/product.css" layer(components);
+@import "../styles/components/home.css" layer(components);
