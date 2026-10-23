@@ -55,6 +55,28 @@ pub struct WorkerConfig {
     pub cost_rates: CostRates,
     /// `CATEGORY_LISTINGS_PATH` (default `config/category_listings.json`).
     pub category_listings_path: PathBuf,
+    /// `DEMO_DATA` (default `false`; exactly `true` or `false`): serve the
+    /// demo catalog through a fake Bright Data connector, with no network
+    /// calls (ADR 0016). It also raises the default Bright Data caps to
+    /// [`DEMO_CAPS`], since nothing is paid; set caps still win.
+    pub demo_data: bool,
+}
+
+/// Default Bright Data caps in demo mode: a demo search is one page run
+/// plus one or two Amazon dataset runs per offer, which the paid defaults
+/// would cap after one search.
+pub const DEMO_CAPS: Caps = Caps {
+    max_runs_per_tenant_per_day: 10_000,
+    max_items_per_tenant_per_day: 1_000_000,
+    max_items_per_run: 50,
+};
+
+fn flag(lookup: &impl Fn(&str) -> Option<String>, name: &'static str) -> Result<bool, ConfigError> {
+    match lookup(name).as_deref().map(str::trim) {
+        None | Some("false") => Ok(false),
+        Some("true") => Ok(true),
+        Some(_) => Err(ConfigError(name)),
+    }
 }
 
 fn number<T: std::str::FromStr + PartialOrd + Copy>(
@@ -100,7 +122,12 @@ impl WorkerConfig {
     ///
     /// [`ConfigError`] naming the first malformed variable.
     pub fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
-        let defaults = Caps::default();
+        let demo_data = flag(&lookup, "DEMO_DATA")?;
+        let defaults = if demo_data {
+            DEMO_CAPS
+        } else {
+            Caps::default()
+        };
         let path = lookup("CATEGORY_LISTINGS_PATH")
             .map(|p| p.trim().to_owned())
             .unwrap_or_else(|| "config/category_listings.json".to_owned());
@@ -171,6 +198,7 @@ impl WorkerConfig {
                 )?,
             },
             category_listings_path: PathBuf::from(path),
+            demo_data,
         })
     }
 
@@ -208,6 +236,7 @@ mod tests {
             (900, 5, 2000)
         );
         assert_eq!(c.caps, Caps::default());
+        assert!(!c.demo_data);
         assert_eq!(c.amazon_requests_per_day, 1000);
         assert_eq!(
             (
@@ -242,6 +271,24 @@ mod tests {
     }
 
     #[test]
+    fn demo_mode_raises_only_unset_caps() {
+        let c = load(&[("DEMO_DATA", "true")]).unwrap();
+        assert!(c.demo_data);
+        assert_eq!(c.caps, DEMO_CAPS);
+        let c = load(&[
+            ("DEMO_DATA", "true"),
+            ("BRIGHTDATA_MAX_RUNS_PER_TENANT_PER_DAY", "40"),
+        ])
+        .unwrap();
+        assert_eq!(c.caps.max_runs_per_tenant_per_day, 40);
+        assert_eq!(
+            c.caps.max_items_per_tenant_per_day,
+            DEMO_CAPS.max_items_per_tenant_per_day
+        );
+        assert!(!load(&[("DEMO_DATA", "false")]).unwrap().demo_data);
+    }
+
+    #[test]
     fn bad_values_fail_closed_naming_the_variable_only() {
         for (name, value) in [
             ("REFRESH_CRON", "not a cron"),
@@ -252,6 +299,8 @@ mod tests {
             ("REFRESH_BATCH_SIZE", "abc"),
             ("ROI_SHIPPING_CENTAVOS", "-5"),
             ("CATEGORY_LISTINGS_PATH", "  "),
+            ("DEMO_DATA", "1"),
+            ("DEMO_DATA", "TRUE"),
         ] {
             let err = load(&[(name, value)]).unwrap_err();
             assert_eq!(err, ConfigError(name));

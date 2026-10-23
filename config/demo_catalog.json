@@ -1,0 +1,733 @@
+{
+  "products": [
+    {
+      "key": "licuadora-oster",
+      "keywords": [
+        "licuadora",
+        "licuadoras",
+        "oster",
+        "cocina",
+        "electrodomesticos"
+      ],
+      "brand": "Oster",
+      "gtin": "7509010001012",
+      "amazon": {
+        "asin": "B0DEMO0001",
+        "title": "Oster Licuadora Clásica de 10 Velocidades con Vaso de Vidrio 1.25 L BLSTKAG",
+        "brand": "Oster",
+        "price_centavos": 149900,
+        "fba_fee_centavos": 7800
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100101",
+          "title": "Licuadora Oster 10 velocidades vaso de vidrio 1.25 L",
+          "price_centavos": 89900
+        },
+        {
+          "retailer": "liverpool",
+          "sku": "1100101",
+          "title": "Licuadora Oster Clásica BLSTKAG 1.25 L",
+          "price_centavos": 104900
+        },
+        {
+          "retailer": "bodega_aurrera",
+          "sku": "750100102",
+          "title": "Licuadora Oster 10 Velocidades 1.25 L",
+          "price_centavos": 86900
+        }
+      ]
+    },
+    {
+      "key": "freidora-ninja",
+      "keywords": [
+        "freidora",
+        "freidoras",
+        "aire",
+        "ninja",
+        "cocina",
+        "electrodomesticos"
+      ],
+      "brand": "Ninja",
+      "gtin": "7509010001029",
+      "amazon": {
+        "asin": "B0DEMO0002",
+        "title": "Ninja Freidora de Aire AF101 3.8 L Antiadherente Negro",
+        "brand": "Ninja",
+        "price_centavos": 289900,
+        "fba_fee_centavos": 9500
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "liverpool",
+          "sku": "1100102",
+          "title": "Freidora de aire Ninja AF101 3.8 L",
+          "price_centavos": 219900
+        },
+        {
+          "retailer": "costco_mx",
+          "sku": "660102",
+          "title": "Ninja Freidora de Aire 3.8 L AF101",
+          "price_centavos": 189900
+        }
+      ]
+    },
+    {
+      "key": "cafetera-nespresso",
+      "keywords": [
+        "cafetera",
+        "cafeteras",
+        "nespresso",
+        "cafe",
+        "cocina"
+      ],
+      "brand": "Nespresso",
+      "gtin": "7509010001036",
+      "amazon": {
+        "asin": "B0DEMO0003",
+        "title": "Nespresso Vertuo Pop Cafetera de Cápsulas Negro",
+        "brand": "Nespresso",
+        "price_centavos": 319900,
+        "fba_fee_centavos": 8800
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "liverpool",
+          "sku": "1100103",
+          "title": "Cafetera Nespresso Vertuo Pop negro",
+          "price_centavos": 249900
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100103",
+          "title": "Cafetera Nespresso Vertuo Pop Negra",
+          "price_centavos": 229900
+        }
+      ]
+    },
+    {
+      "key": "audifonos-sony",
+      "keywords": [
+        "audifonos",
+        "audifono",
+        "sony",
+        "bluetooth",
+        "electronica"
+      ],
+      "brand": "Sony",
+      "gtin": "7509010001043",
+      "amazon": {
+        "asin": "B0DEMO0004",
+        "title": "Sony WH-CH520 Audífonos Inalámbricos Bluetooth Negro",
+        "brand": "Sony",
+        "price_centavos": 129900,
+        "fba_fee_centavos": 6200
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100104",
+          "title": "Audífonos Sony WH-CH520 inalámbricos negro",
+          "price_centavos": 89900
+        },
+        {
+          "retailer": "liverpool",
+          "sku": "1100104",
+          "title": "Audífonos inalámbricos Sony WH-CH520",
+          "price_centavos": 99900
+        },
+        {
+          "retailer": "sams_mx",
+          "sku": "980100104",
+          "title": "Audífonos Sony WH-CH520 Bluetooth",
+          "price_centavos": 84900
+        }
+      ]
+    },
+    {
+      "key": "bocina-jbl",
+      "keywords": [
+        "bocina",
+        "bocinas",
+        "jbl",
+        "bluetooth",
+        "electronica"
+      ],
+      "brand": "JBL",
+      "gtin": "7509010001050",
+      "amazon": {
+        "asin": "B0DEMO0005",
+        "title": "JBL Flip 6 Bocina Portátil Bluetooth a Prueba de Agua Azul",
+        "brand": "JBL",
+        "price_centavos": 279900,
+        "fba_fee_centavos": 7000
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "liverpool",
+          "sku": "1100105",
+          "title": "Bocina portátil JBL Flip 6 azul",
+          "price_centavos": 239900
+        },
+        {
+          "retailer": "costco_mx",
+          "sku": "660105",
+          "title": "JBL Flip 6 Bocina Bluetooth",
+          "price_centavos": 209900
+        },
+        {
+          "retailer": "sams_mx",
+          "sku": "980100105",
+          "title": "Bocina JBL Flip 6 Azul",
+          "price_centavos": 199900
+        }
+      ]
+    },
+    {
+      "key": "plancha-black-decker",
+      "keywords": [
+        "plancha",
+        "planchas",
+        "vapor",
+        "black",
+        "decker",
+        "hogar"
+      ],
+      "brand": "Black+Decker",
+      "gtin": "7509010001067",
+      "amazon": {
+        "asin": "B0DEMO0006",
+        "title": "BLACK+DECKER Plancha de Vapor Antiadherente IR1010",
+        "brand": "Black+Decker",
+        "price_centavos": 69900,
+        "fba_fee_centavos": 5800
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100106",
+          "title": "Plancha de vapor Black+Decker IR1010",
+          "price_centavos": 44900
+        },
+        {
+          "retailer": "chedraui",
+          "sku": "plancha-vapor-black-decker-ir1010-100106",
+          "title": "Plancha de Vapor Black+Decker IR1010",
+          "price_centavos": 47900
+        },
+        {
+          "retailer": "bodega_aurrera",
+          "sku": "750100107",
+          "title": "Plancha Black+Decker Vapor IR1010",
+          "price_centavos": 42900
+        }
+      ]
+    },
+    {
+      "key": "termo-stanley",
+      "keywords": [
+        "termo",
+        "termos",
+        "stanley",
+        "vaso",
+        "hogar"
+      ],
+      "brand": "Stanley",
+      "gtin": "7509010001074",
+      "amazon": {
+        "asin": "B0DEMO0007",
+        "title": "Stanley Quencher H2.0 Vaso Térmico 1.18 L Crema",
+        "brand": "Stanley",
+        "price_centavos": 119900,
+        "fba_fee_centavos": 6000
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "liverpool",
+          "sku": "1100107",
+          "title": "Vaso térmico Stanley Quencher H2.0 1.18 L",
+          "price_centavos": 89900
+        },
+        {
+          "retailer": "costco_mx",
+          "sku": "660107",
+          "title": "Stanley Quencher Vaso Térmico 1.18 L",
+          "price_centavos": 74900
+        }
+      ]
+    },
+    {
+      "key": "taladro-dewalt",
+      "keywords": [
+        "taladro",
+        "taladros",
+        "dewalt",
+        "herramienta",
+        "herramientas"
+      ],
+      "brand": "DeWalt",
+      "gtin": "7509010001081",
+      "amazon": {
+        "asin": "B0DEMO0008",
+        "title": "DEWALT Taladro Atornillador Inalámbrico 20V MAX DCD777C2",
+        "brand": "DeWalt",
+        "price_centavos": 284900,
+        "fba_fee_centavos": 9200
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100108",
+          "title": "Taladro inalámbrico DeWalt 20V DCD777C2",
+          "price_centavos": 219900
+        },
+        {
+          "retailer": "costco_mx",
+          "sku": "660108",
+          "title": "DeWalt Taladro Atornillador 20V MAX",
+          "price_centavos": 199900
+        },
+        {
+          "retailer": "sams_mx",
+          "sku": "980100108",
+          "title": "Taladro DeWalt DCD777C2 20V",
+          "price_centavos": 194900
+        }
+      ]
+    },
+    {
+      "key": "batidora-hamilton",
+      "keywords": [
+        "batidora",
+        "batidoras",
+        "hamilton",
+        "beach",
+        "cocina"
+      ],
+      "brand": "Hamilton Beach",
+      "gtin": "7509010001098",
+      "amazon": {
+        "asin": "B0DEMO0009",
+        "title": "Hamilton Beach Batidora de Mano 6 Velocidades 62692",
+        "brand": "Hamilton Beach",
+        "price_centavos": 84900,
+        "fba_fee_centavos": 5500
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "chedraui",
+          "sku": "batidora-mano-hamilton-beach-62692-100109",
+          "title": "Batidora de mano Hamilton Beach 6 velocidades",
+          "price_centavos": 54900
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100109",
+          "title": "Batidora de Mano Hamilton Beach 62692",
+          "price_centavos": 52900
+        }
+      ]
+    },
+    {
+      "key": "cafe-legal",
+      "keywords": [
+        "cafe",
+        "legal",
+        "molido",
+        "despensa"
+      ],
+      "brand": "Café Legal",
+      "gtin": "7509010001104",
+      "amazon": {
+        "asin": "B0DEMO0010",
+        "title": "Café Legal Molido Tradicional 400 g",
+        "brand": "Café Legal",
+        "price_centavos": 12900,
+        "fba_fee_centavos": 4500
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "heb_mx",
+          "sku": "cafe-legal-molido-400-g-100110",
+          "title": "Café Legal molido tradicional 400 g",
+          "price_centavos": 8900
+        },
+        {
+          "retailer": "chedraui",
+          "sku": "cafe-legal-molido-400-g-100111",
+          "title": "Café Legal Molido 400 g",
+          "price_centavos": 9200
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100110",
+          "title": "Café molido Legal tradicional 400 g",
+          "price_centavos": 9500
+        }
+      ]
+    },
+    {
+      "key": "tv-samsung",
+      "keywords": [
+        "television",
+        "televisiones",
+        "tv",
+        "pantalla",
+        "samsung",
+        "electronica"
+      ],
+      "brand": "Samsung",
+      "gtin": "7509010001111",
+      "amazon": {
+        "asin": "B0DEMO0011",
+        "title": "Samsung Smart TV 50 Pulgadas Crystal UHD 4K UN50DU7000",
+        "brand": "Samsung",
+        "price_centavos": 879900,
+        "fba_fee_centavos": 42000
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "liverpool",
+          "sku": "1100111",
+          "title": "Pantalla Samsung 50 pulgadas Crystal UHD 4K",
+          "price_centavos": 899900
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100111",
+          "title": "TV Samsung 50 Pulgadas Crystal UHD 4K Smart",
+          "price_centavos": 849900
+        },
+        {
+          "retailer": "costco_mx",
+          "sku": "660111",
+          "title": "Samsung Pantalla 50 pulgadas Crystal UHD 4K",
+          "price_centavos": 829900
+        }
+      ]
+    },
+    {
+      "key": "nintendo-switch",
+      "keywords": [
+        "consola",
+        "consolas",
+        "nintendo",
+        "switch",
+        "videojuegos",
+        "electronica"
+      ],
+      "brand": "Nintendo",
+      "gtin": "7509010001128",
+      "amazon": {
+        "asin": "B0DEMO0012",
+        "title": "Nintendo Switch OLED Consola Blanca 64 GB",
+        "brand": "Nintendo",
+        "price_centavos": 719900,
+        "fba_fee_centavos": 21000
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "liverpool",
+          "sku": "1100112",
+          "title": "Consola Nintendo Switch OLED blanca",
+          "price_centavos": 749900
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100112",
+          "title": "Consola Nintendo Switch OLED 64 GB Blanco",
+          "price_centavos": 729900
+        },
+        {
+          "retailer": "sams_mx",
+          "sku": "980100112",
+          "title": "Nintendo Switch OLED Blanco",
+          "price_centavos": 699900
+        }
+      ]
+    },
+    {
+      "key": "roomba",
+      "keywords": [
+        "aspiradora",
+        "aspiradoras",
+        "robot",
+        "roomba",
+        "irobot",
+        "hogar"
+      ],
+      "brand": "iRobot",
+      "gtin": "7509010001135",
+      "amazon": {
+        "asin": "B0DEMO0013",
+        "title": "iRobot Roomba 694 Aspiradora Robot con Wi-Fi",
+        "brand": "iRobot",
+        "price_centavos": 529900,
+        "fba_fee_centavos": 19000
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "liverpool",
+          "sku": "1100113",
+          "title": "Aspiradora robot iRobot Roomba 694 Wi-Fi",
+          "price_centavos": 549900
+        },
+        {
+          "retailer": "costco_mx",
+          "sku": "660113",
+          "title": "iRobot Roomba 694 Aspiradora Robot",
+          "price_centavos": 499900
+        }
+      ]
+    },
+    {
+      "key": "panales-huggies",
+      "keywords": [
+        "panales",
+        "huggies",
+        "bebe",
+        "despensa"
+      ],
+      "brand": "Huggies",
+      "gtin": "7509010001142",
+      "amazon": {
+        "asin": "B0DEMO0014",
+        "title": "Huggies Supreme Pañales Etapa 4 80 Piezas",
+        "brand": "Huggies",
+        "price_centavos": 71900,
+        "fba_fee_centavos": 8500
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "costco_mx",
+          "sku": "660114",
+          "title": "Huggies Supreme Pañales Etapa 4, 80 piezas",
+          "price_centavos": 64900
+        },
+        {
+          "retailer": "sams_mx",
+          "sku": "980100114",
+          "title": "Pañales Huggies Supreme Etapa 4 80 pzas",
+          "price_centavos": 62900
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100114",
+          "title": "Pañales Huggies Supreme etapa 4 80 piezas",
+          "price_centavos": 69900
+        },
+        {
+          "retailer": "heb_mx",
+          "sku": "panales-huggies-supreme-etapa-4-80-pzas-100114",
+          "title": "Pañales Huggies Supreme Etapa 4 80 pzas",
+          "price_centavos": 68900
+        }
+      ]
+    },
+    {
+      "key": "olla-tfal",
+      "keywords": [
+        "olla",
+        "ollas",
+        "presion",
+        "tfal",
+        "cocina"
+      ],
+      "brand": "T-fal",
+      "gtin": null,
+      "amazon": {
+        "asin": "B0DEMO0015",
+        "title": "T-fal Olla Express de Presión Acero Inoxidable 6 Litros P2614634",
+        "brand": "T-fal",
+        "price_centavos": 179900,
+        "fba_fee_centavos": 7200
+      },
+      "expected": "needs_review",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100115",
+          "title": "Olla de presión T-fal acero inoxidable 6 L",
+          "price_centavos": 119900
+        },
+        {
+          "retailer": "chedraui",
+          "sku": "olla-presion-t-fal-6-litros-100115",
+          "title": "Olla Express T-fal de Presión 6 Litros",
+          "price_centavos": 124900
+        }
+      ]
+    },
+    {
+      "key": "sartenes-vasconia",
+      "keywords": [
+        "sarten",
+        "sartenes",
+        "vasconia",
+        "cocina"
+      ],
+      "brand": "Vasconia",
+      "gtin": null,
+      "amazon": {
+        "asin": "B0DEMO0016",
+        "title": "Vasconia Set de Sartenes Antiadherentes Línea Mantra 3 Piezas Gris",
+        "brand": "Vasconia",
+        "price_centavos": 99900,
+        "fba_fee_centavos": 6000
+      },
+      "expected": "needs_review",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100116",
+          "title": "Juego de sartenes Vasconia antiadherentes 3 piezas",
+          "price_centavos": 69900
+        },
+        {
+          "retailer": "bodega_aurrera",
+          "sku": "750100117",
+          "title": "Sartenes Vasconia Mantra 3 piezas",
+          "price_centavos": 64900
+        }
+      ]
+    },
+    {
+      "key": "ventilador-mytek",
+      "keywords": [
+        "ventilador",
+        "ventiladores",
+        "mytek",
+        "hogar"
+      ],
+      "brand": "Mytek",
+      "gtin": null,
+      "amazon": {
+        "asin": "B0DEMO0017",
+        "title": "Mytek Ventilador de Pie 3 Velocidades 18 Pulgadas Blanco 3368",
+        "brand": "Mytek",
+        "price_centavos": 114900,
+        "fba_fee_centavos": 6600
+      },
+      "expected": "needs_review",
+      "listings": [
+        {
+          "retailer": "bodega_aurrera",
+          "sku": "750100118",
+          "title": "Ventilador de pedestal Mytek 18 pulgadas",
+          "price_centavos": 79900
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100119",
+          "title": "Ventilador Mytek de pie 18 pulgadas",
+          "price_centavos": 84900
+        }
+      ]
+    },
+    {
+      "key": "cepillo-oralb",
+      "keywords": [
+        "cepillo",
+        "cepillos",
+        "dental",
+        "oral",
+        "electrico"
+      ],
+      "brand": "Oral-B",
+      "gtin": null,
+      "amazon": {
+        "asin": "B0DEMO0018",
+        "title": "Oral-B Cepillo Dental Eléctrico Recargable Pro Series 1 Azul",
+        "brand": "Oral-B",
+        "price_centavos": 134900,
+        "fba_fee_centavos": 5800
+      },
+      "expected": "needs_review",
+      "listings": [
+        {
+          "retailer": "heb_mx",
+          "sku": "cepillo-electrico-oral-b-pro-series-1-100118",
+          "title": "Cepillo eléctrico Oral-B Pro Series 1",
+          "price_centavos": 89900
+        },
+        {
+          "retailer": "liverpool",
+          "sku": "1100118",
+          "title": "Cepillo eléctrico Oral-B Pro 1",
+          "price_centavos": 99900
+        }
+      ]
+    },
+    {
+      "key": "tortillero",
+      "keywords": [
+        "tortillero",
+        "tortilleros",
+        "palma",
+        "cocina",
+        "artesanal"
+      ],
+      "brand": "Artesanías Michoacán",
+      "gtin": null,
+      "amazon": null,
+      "expected": "no_match",
+      "listings": [
+        {
+          "retailer": "chedraui",
+          "sku": "tortillero-palma-artesanal-100119",
+          "title": "Tortillero térmico artesanal de palma",
+          "price_centavos": 12900
+        },
+        {
+          "retailer": "bodega_aurrera",
+          "sku": "750100120",
+          "title": "Tortillero de palma tejido a mano",
+          "price_centavos": 11900
+        }
+      ]
+    },
+    {
+      "key": "molcajete",
+      "keywords": [
+        "molcajete",
+        "molcajetes",
+        "piedra",
+        "volcanica",
+        "cocina"
+      ],
+      "brand": "Hecho en Puebla",
+      "gtin": null,
+      "amazon": null,
+      "expected": "no_match",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100121",
+          "title": "Molcajete de piedra volcánica 20 cm",
+          "price_centavos": 34900
+        },
+        {
+          "retailer": "chedraui",
+          "sku": "molcajete-piedra-volcanica-20-cm-100121",
+          "title": "Molcajete de Piedra Volcánica 20 cm",
+          "price_centavos": 36900
+        }
+      ]
+    }
+  ]
+}

@@ -209,7 +209,9 @@ pub type ProductSource = fn(&scraper::Html) -> Draft;
 /// Search offers from the first source (in priority order) that yields any.
 ///
 /// # Errors
-/// [`ParseError::WrongHost`] or [`ParseError::NoOffers`].
+/// [`ParseError::WrongHost`]; [`ParseError::NoResults`] when no source
+/// yields an offer and the page states it has zero results
+/// ([`jsonld::declares_no_results`]); otherwise [`ParseError::NoOffers`].
 pub fn search_from(
     info: &RetailerInfo,
     page: &Page,
@@ -222,7 +224,11 @@ pub fn search_from(
             return Ok(offers);
         }
     }
-    Err(ParseError::NoOffers)
+    if jsonld::declares_no_results(&doc) {
+        Err(ParseError::NoResults)
+    } else {
+        Err(ParseError::NoOffers)
+    }
 }
 
 /// The product offer: fields from earlier sources win; later sources only

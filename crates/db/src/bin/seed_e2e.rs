@@ -16,11 +16,11 @@
 //!   that account with fixed results and marks it `done`. With `--watch` it
 //!   keeps doing so every 500 ms until stopped.
 
-use std::ffi::OsStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, bail};
 use db::DatabaseUrl;
+use db::local_guard::{ALLOW_REMOTE_ENV, check_target};
 use db::price_history::MatchRow;
 use db::searches::{RetailerOutcomeRow, SearchResultRow};
 use sqlx::{PgPool, Row as _};
@@ -49,33 +49,6 @@ const DEFAULT_PASSWORD: &str = "e2e-password-123";
 const HISTORY_DAYS: i64 = 400;
 
 const DAY_MS: i64 = 86_400_000;
-
-/// Opt-in to seed a database that is not on a loopback host.
-const ALLOW_REMOTE_ENV: &str = "E2E_ALLOW_REMOTE_DB";
-
-/// Whether `url` points at a loopback TCP host (a Unix socket is not
-/// accepted: it may be a real server's local socket).
-fn is_local_target(url: &DatabaseUrl) -> bool {
-    url.host().is_some_and(|host| {
-        let host = host
-            .strip_prefix('[')
-            .and_then(|h| h.strip_suffix(']'))
-            .unwrap_or(host);
-        host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
-    })
-}
-
-/// Refuses non-local targets unless `allow_remote` (the value of
-/// [`ALLOW_REMOTE_ENV`]) is exactly `true`. The error names only the
-/// variables, never the URL.
-fn check_target(url: &DatabaseUrl, allow_remote: Option<&OsStr>) -> anyhow::Result<()> {
-    if is_local_target(url) || allow_remote == Some(OsStr::new("true")) {
-        return Ok(());
-    }
-    bail!(
-        "refusing to seed: the DATABASE_URL host is not localhost, 127.0.0.1 or ::1 (set {ALLOW_REMOTE_ENV}=true to seed a non-local test database)"
-    )
-}
 
 /// `(retailer, sku, base price in centavos)` of the matched listings.
 const LISTINGS: [(&str, &str, i64); 3] = [
@@ -413,48 +386,6 @@ async fn complete(pool: &PgPool) -> anyhow::Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use secrets::Secret;
-
-    fn url(value: &str) -> DatabaseUrl {
-        DatabaseUrl::new(Secret::new(value.to_owned()).unwrap()).unwrap()
-    }
-
-    #[test]
-    fn local_hosts_pass() {
-        for value in [
-            "postgres://mex:mex@127.0.0.1:5432/mex_scrape",
-            "postgres://mex:mex@localhost/mex_scrape",
-            "postgresql://mex:mex@LOCALHOST:5432/mex_scrape",
-            "postgres://mex:mex@[::1]:5432/mex_scrape",
-        ] {
-            assert!(is_local_target(&url(value)), "{value}");
-            assert!(check_target(&url(value), None).is_ok(), "{value}");
-        }
-    }
-
-    #[test]
-    fn remote_hosts_fail_without_leaking_the_url() {
-        for value in [
-            "postgres://x:y@db.example.com/z",
-            "postgres://x:y@10.0.0.5:5432/z",
-            "postgres://x:y@127.0.0.1.example.com/z",
-            "postgres://x:y@127.0.0.1/z?host=db.example.com",
-            "postgres://x:y@localhost/z?host=/var/run/postgresql",
-        ] {
-            assert!(!is_local_target(&url(value)), "{value}");
-            for allow in [None, Some(OsStr::new("1")), Some(OsStr::new("TRUE"))] {
-                let error = check_target(&url(value), allow).unwrap_err().to_string();
-                assert!(error.contains(ALLOW_REMOTE_ENV));
-                assert!(!error.contains("example.com") && !error.contains("x:y"));
-            }
-        }
-    }
-
-    #[test]
-    fn remote_host_with_opt_in_passes() {
-        let remote = url("postgres://x:y@db.example.com/z");
-        assert!(check_target(&remote, Some(OsStr::new("true"))).is_ok());
-    }
 
     #[test]
     fn prices_stay_positive_and_vary() {

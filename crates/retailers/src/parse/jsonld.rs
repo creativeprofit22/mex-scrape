@@ -68,6 +68,24 @@ pub fn products(doc: &Html) -> Vec<Value> {
     out
 }
 
+/// Whether the page's JSON-LD states an empty result: an `ItemList` whose
+/// `numberOfItems` is `0` (number or string) and no `Product` anywhere. An
+/// `ItemList` without `numberOfItems`, or one that merely lists nothing, is
+/// not enough: a page whose results load later can ship an empty list.
+#[must_use]
+pub fn declares_no_results(doc: &Html) -> bool {
+    let nodes = nodes(doc);
+    let zero = |n: &Value| match n.get("numberOfItems") {
+        Some(Value::Number(v)) => v.as_u64() == Some(0),
+        Some(Value::String(s)) => s.trim() == "0",
+        _ => false,
+    };
+    nodes.iter().any(|n| is_type(n, "ItemList") && zero(n))
+        && !nodes.iter().any(|n| {
+            is_type(n, "Product") || (is_type(n, "ItemList") && !item_list_products(n).is_empty())
+        })
+}
+
 /// `Product`s listed in an `ItemList` (`itemListElement[].item` or direct).
 #[must_use]
 pub fn item_list_products(list: &Value) -> Vec<Value> {
@@ -208,6 +226,33 @@ mod tests {
         assert_eq!(dr.availability, Some(Availability::InStock));
         assert_eq!(dr.gtin.as_deref(), Some("7501055300075"));
         assert_eq!(dr.sku.as_deref(), Some("123"));
+    }
+
+    #[test]
+    fn only_an_explicit_zero_count_declares_no_results() {
+        for zero in [
+            r#"{"@type":"ItemList","numberOfItems":0,"itemListElement":[]}"#,
+            r#"{"@graph":[{"@type":"WebPage"},{"@type":"ItemList","numberOfItems":" 0 "}]}"#,
+        ] {
+            assert!(declares_no_results(&doc(&[zero])), "{zero}");
+        }
+        for not_zero in [
+            r#"{"@type":"ItemList","itemListElement":[]}"#,
+            r#"{"@type":"ItemList","numberOfItems":"100","itemListElement":[]}"#,
+            r#"{"@type":"ItemList","numberOfItems":null}"#,
+            r#"{"@type":"WebPage"}"#,
+        ] {
+            assert!(!declares_no_results(&doc(&[not_zero])), "{not_zero}");
+        }
+        // A zero count next to real products is not trusted.
+        assert!(!declares_no_results(&doc(&[
+            r#"{"@type":"ItemList","numberOfItems":0}"#,
+            r#"{"@type":"Product","name":"A"}"#,
+        ])));
+        assert!(!declares_no_results(&doc(&[
+            r#"{"@type":"ItemList","numberOfItems":0,"itemListElement":[{"@type":"Product","name":"A"}]}"#,
+        ])));
+        assert!(!declares_no_results(&Html::parse_document("<html></html>")));
     }
 
     #[test]

@@ -21,6 +21,16 @@ Layout, module map and allowed crate dependencies: [docs/ARCHITECTURE.md](docs/A
 - Apply migrations: `DATABASE_URL=postgres://mex:mex@127.0.0.1:5432/mex_scrape cargo run -p db --bin migrate`
 - New migration: add `crates/db/migrations/NNNN_name.sql`; update `docs/modules/db.md` (Owned tables).
 
+### Demo data (local only)
+
+Fake but realistic data on every screen, through the real worker → db → API path ([ADR 0016](docs/decisions/0016-demo-data-mode.md); details in [docs/modules/db.md](docs/modules/db.md#demo-data)):
+
+1. `cargo run -p db --bin seed_demo`: the demo login `demo@example.com` / `demo-password-123` and a year of prices for the 20 products in `config/demo_catalog.json`. It needs the env above, refuses a non-local `DATABASE_URL`, and is safe to rerun.
+2. Start the worker with `DEMO_DATA=true cargo run -p worker --bin worker`: a fake Bright Data connector serves the catalog, with no network calls and no change to the real connector flag.
+3. Sign in as the demo account and search a catalog keyword (`licuadora`, `audifonos`, `cocina`, `electronica`, …).
+
+The demo worker runs only the demo account's searches, so it can stay up during `npm --prefix web run e2e` (e2e searches stay for `seed_e2e complete`).
+
 ### Web (`web/`)
 
 - Install: `npm --prefix web ci`

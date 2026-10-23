@@ -65,6 +65,11 @@ pub enum ParseError {
     /// No offer could be extracted.
     #[error("no offers found")]
     NoOffers,
+    /// The page parsed and states it has no results (a search with zero
+    /// hits), so there is nothing to extract. Unlike [`Self::NoOffers`],
+    /// this counts as a successful parse.
+    #[error("page has no results")]
+    NoResults,
     /// A required field was missing everywhere it was looked for.
     #[error("missing field: {0}")]
     MissingField(&'static str),

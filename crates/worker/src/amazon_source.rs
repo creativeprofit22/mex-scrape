@@ -36,6 +36,16 @@ pub struct TenantAmazonSources<T, S> {
     caps: Caps,
 }
 
+impl<T, S> TenantAmazonSources<T, S> {
+    /// The same sources with `primary` in place of SP-API (demo mode's fee
+    /// estimates, ADR 0016).
+    #[must_use]
+    pub fn with_primary(mut self, primary: Arc<dyn AmazonSource>) -> Self {
+        self.primary = Some(primary);
+        self
+    }
+}
+
 impl<T, S> TenantAmazon for TenantAmazonSources<T, S>
 where
     T: Transport + 'static,

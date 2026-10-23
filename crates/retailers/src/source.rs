@@ -13,7 +13,7 @@ use app::{Clock, OfferSource, OfferSourceError, PortFuture};
 use brightdata::TargetUrl;
 use domain::{Offer, RetailerId, RetailerSku};
 
-use crate::adapter::{AdapterError, Page, ParseKind, Retailer};
+use crate::adapter::{AdapterError, Page, ParseError, ParseKind, Retailer};
 use crate::health::{ParseHealth, parse_page};
 use crate::registry::{AccessMode, PageKind};
 
@@ -112,7 +112,12 @@ impl RetailerOfferSource {
         // A panic elsewhere mid-`record` leaves only a counter update
         // half-done; keep tracking rather than silencing the alerts.
         let mut health = health.lock().unwrap_or_else(PoisonError::into_inner);
-        parse_page(adapter, kind, page, &mut health).map_err(|_| OfferSourceError::ParseFailed)
+        match parse_page(adapter, kind, page, &mut health) {
+            Ok(offers) => Ok(offers),
+            // The store says it has no results: an empty answer.
+            Err(ParseError::NoResults) => Ok(Vec::new()),
+            Err(_) => Err(OfferSourceError::ParseFailed),
+        }
     }
 }
 

@@ -37,7 +37,7 @@ pub enum OfferMatchError {
 /// [`amazon::MAX_KEYWORD_CHARS`] characters, which both Amazon adapters
 /// enforce. A single word longer than the limit is cut mid-word on a char
 /// boundary.
-fn keyword_query(brand: Option<&str>, title: &str) -> String {
+pub(crate) fn keyword_query(brand: Option<&str>, title: &str) -> String {
     let mut query = String::new();
     let mut len = 0;
     for word in brand

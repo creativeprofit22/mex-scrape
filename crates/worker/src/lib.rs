@@ -13,6 +13,7 @@ pub mod brightdata_resume;
 pub mod brightdata_store;
 pub mod clock;
 pub mod config;
+pub mod demo;
 pub mod jobs;
 pub mod metrics;
 pub mod offer_matching;

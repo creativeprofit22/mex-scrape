@@ -6,6 +6,8 @@
 pub mod access;
 pub mod assistant;
 pub mod brightdata_runs;
+pub mod demo_catalog;
+pub mod local_guard;
 pub mod price_history;
 pub mod queue;
 pub mod searches;

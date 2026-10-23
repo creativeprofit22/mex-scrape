@@ -12,7 +12,7 @@ use std::sync::{Mutex, PoisonError};
 use brightdata::runs::{PageAccess, RunSink};
 use brightdata::{TargetUrl, UnlockedPage};
 use domain::{Offer, UnixMillis};
-use retailers::{Page, ParseHealth, ParseKind, parse_page};
+use retailers::{Page, ParseError, ParseHealth, ParseKind, parse_page};
 use serde_json::Value;
 
 use crate::metrics::JobMetrics;
@@ -87,10 +87,16 @@ impl RunSink for OfferCollector<'_> {
         };
         let id = adapter.info().id;
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        let offers = parsed.unwrap_or_default();
-        state
-            .metrics
-            .page(id, self.access, bytes, !offers.is_empty());
+        // A page that states it has no results parsed fine, with no offers.
+        let (offers, parsed_ok) = match parsed {
+            Ok(offers) => {
+                let ok = !offers.is_empty();
+                (offers, ok)
+            }
+            Err(ParseError::NoResults) => (Vec::new(), true),
+            Err(_) => (Vec::new(), false),
+        };
+        state.metrics.page(id, self.access, bytes, parsed_ok);
         state.offers.extend(offers.into_iter().map(|o| (id, o)));
         Ok(())
     }
@@ -145,5 +151,23 @@ mod tests {
         let m = c.metrics.get("walmart_mx");
         assert_eq!((m.parse_ok, m.parse_failed, m.unlocker_pages), (0, 1, 1));
         assert_eq!(h.lock().unwrap().rate("walmart_mx"), Some((0.0, 1)));
+    }
+
+    #[tokio::test]
+    async fn a_page_stating_no_results_counts_as_parsed() {
+        let h = health();
+        let sink = OfferCollector::new(ParseKind::Search, PageAccess::Unlocker, UnixMillis(1), &h);
+        let url = TargetUrl::parse("https://www.liverpool.com.mx/tienda?s=bicicleta").unwrap();
+        let body = r#"<html><script type="application/ld+json">{"@type":"ItemList","numberOfItems":0,"itemListElement":[]}</script></html>"#;
+        let page = UnlockedPage {
+            status: 200,
+            body: body.to_owned(),
+        };
+        assert_eq!(sink.accept_page(&url, page).await, Ok(()));
+        let c = sink.into_collected();
+        assert!(c.offers.is_empty());
+        let m = c.metrics.get("liverpool");
+        assert_eq!((m.parse_ok, m.parse_failed), (1, 0));
+        assert_eq!(h.lock().unwrap().rate("liverpool"), Some((1.0, 1)));
     }
 }

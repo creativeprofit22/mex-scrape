@@ -20,12 +20,29 @@ const INVALID_ROW: &str = "A stored Bright Data run is invalid";
 pub struct PgRunStore {
     pool: PgPool,
     redactor: Redactor,
+    demo_connector: bool,
 }
 
 impl PgRunStore {
     /// `redactor` must cover the database URL (`DatabaseUrl::redactor`).
     pub fn new(pool: PgPool, redactor: Redactor) -> Self {
-        Self { pool, redactor }
+        Self {
+            pool,
+            redactor,
+            demo_connector: false,
+        }
+    }
+
+    /// The same store for demo mode (ADR 0016): the connector gate passes
+    /// without `safety_settings.brightdata_enabled`, because the demo
+    /// transport makes no paid call, so a demo never needs the real
+    /// connector turned on. The kill switch, caps and run limits still
+    /// apply, and a missing settings row still fails closed. Use only with
+    /// the demo transport.
+    #[must_use]
+    pub fn with_demo_connector(mut self) -> Self {
+        self.demo_connector = true;
+        self
     }
 
     /// Logs the redacted database error and returns fixed text.
@@ -77,7 +94,10 @@ impl RunStore for PgRunStore {
             .map_err(|error| self.storage(&error))?;
         // A missing settings row fails closed.
         let (kill_switch_on, connector_enabled) = settings.map_or((true, false), |settings| {
-            (settings.global_kill_switch, settings.brightdata_enabled)
+            (
+                settings.global_kill_switch,
+                settings.brightdata_enabled || self.demo_connector,
+            )
         });
         Ok(GateState {
             kill_switch_on,

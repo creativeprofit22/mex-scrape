@@ -179,7 +179,11 @@ pub fn parse_page(
         ParseKind::Search => adapter.parse_search(page),
         ParseKind::Product => adapter.parse_product(page).map(|o| vec![o]),
     };
-    let ok = result.as_ref().is_ok_and(|o| !o.is_empty());
+    // A page that states it has no results parsed fine.
+    let ok = match &result {
+        Ok(offers) => !offers.is_empty(),
+        Err(error) => *error == ParseError::NoResults,
+    };
     let id = adapter.info().id;
     if let HealthStatus::Alert { rate } = health.record(id, ok) {
         tracing::warn!(
@@ -235,6 +239,41 @@ mod tests {
         assert!(parse_page(&Failing, ParseKind::Search, &page, &mut h).is_ok());
         assert!(parse_page(&Failing, ParseKind::Product, &page, &mut h).is_err());
         assert_eq!(h.rate("liverpool"), Some((0.0, 2)));
+    }
+
+    /// A store whose search page states it has no results.
+    struct Empty;
+
+    impl Retailer for Empty {
+        fn info(&self) -> &'static crate::RetailerInfo {
+            &crate::registry::LIVERPOOL
+        }
+        fn search_url(&self, _: &str) -> Result<brightdata::TargetUrl, crate::AdapterError> {
+            Err(crate::AdapterError::EmptyQuery)
+        }
+        fn product_url(
+            &self,
+            _: &domain::RetailerSku,
+        ) -> Result<brightdata::TargetUrl, crate::AdapterError> {
+            Err(crate::AdapterError::InvalidSku)
+        }
+        fn parse_search(&self, _: &Page) -> Result<Vec<Offer>, ParseError> {
+            Err(ParseError::NoResults)
+        }
+        fn parse_product(&self, _: &Page) -> Result<Offer, ParseError> {
+            Err(ParseError::NoOffers)
+        }
+    }
+
+    #[test]
+    fn a_declared_empty_result_counts_as_parsed() {
+        let mut h = ParseHealth::new(cfg());
+        let page = crate::parse::test_support::page("https://www.liverpool.com.mx/", "");
+        assert_eq!(
+            parse_page(&Empty, ParseKind::Search, &page, &mut h),
+            Err(ParseError::NoResults)
+        );
+        assert_eq!(h.rate("liverpool"), Some((1.0, 1)));
     }
 
     #[test]

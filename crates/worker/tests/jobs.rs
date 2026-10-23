@@ -376,6 +376,7 @@ impl Harness {
         let amazon = SharedAmazon(Arc::clone(&self.amazon) as Arc<dyn AmazonSource>);
         let jobs = Jobs {
             ctx: self.context(&runner, Arc::new(amazon)),
+            only_tenant: None,
         };
         consumer::process_one(&jobs, queue, self.consumer_config())
             .await

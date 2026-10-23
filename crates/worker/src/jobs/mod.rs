@@ -275,6 +275,19 @@ impl<T: Transport, S: RunStore, C: JobClock> JobContext<'_, T, S, C> {
 pub struct Jobs<'a, T, S, C> {
     /// The shared context.
     pub ctx: JobContext<'a, T, S, C>,
+    /// When set, only this tenant's searches run; other tenants' search
+    /// messages are dropped and their rows left untouched (demo mode, ADR
+    /// 0016: e2e searches stay queued for `seed_e2e complete`).
+    pub only_tenant: Option<TenantId>,
+}
+
+/// Whether `only_tenant` excludes `message` (another tenant's search).
+#[must_use]
+pub fn skips(only_tenant: Option<&TenantId>, message: &JobMessage) -> bool {
+    match (only_tenant, message) {
+        (Some(only), JobMessage::Search { tenant, .. }) => tenant != only,
+        _ => false,
+    }
 }
 
 impl<T: Transport, S: RunStore, C: JobClock> Jobs<'_, T, S, C> {
@@ -291,6 +304,15 @@ impl<T: Transport, S: RunStore, C: JobClock> Jobs<'_, T, S, C> {
     ) -> Result<(), JobError> {
         if message.queue() != queue {
             return Err(JobError::Permanent("wrong_queue"));
+        }
+        if skips(self.only_tenant.as_ref(), message) {
+            if let JobMessage::Search { search_id, .. } = message {
+                tracing::info!(
+                    search_id,
+                    "demo mode: another account's search left as it is"
+                );
+            }
+            return Ok(());
         }
         match message {
             JobMessage::Search { search_id, tenant } => {
@@ -318,6 +340,27 @@ impl<T: Transport, S: RunStore, C: JobClock> Jobs<'_, T, S, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_tenant_skips_other_tenants_searches_only() {
+        let demo = TenantId::new("user-9").unwrap();
+        let search = |tenant: &str| JobMessage::Search {
+            search_id: 1,
+            tenant: TenantId::new(tenant).unwrap(),
+        };
+        let refresh = JobMessage::ProductRefresh {
+            retailer: "walmart_mx",
+            skus: vec![RetailerSku::new("123").unwrap()],
+        };
+        let browse = JobMessage::CategoryBrowse {
+            retailer: "sears_mx",
+        };
+        assert!(!skips(None, &search("user-4")));
+        assert!(!skips(Some(&demo), &search("user-9")));
+        assert!(skips(Some(&demo), &search("user-4")));
+        assert!(!skips(Some(&demo), &refresh));
+        assert!(!skips(Some(&demo), &browse));
+    }
 
     #[test]
     fn messages_round_trip_and_name_their_queue() {
