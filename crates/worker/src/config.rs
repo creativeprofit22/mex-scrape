@@ -38,8 +38,9 @@ pub struct WorkerConfig {
     pub caps: Caps,
     /// `AMAZON_MAX_REQUESTS_PER_TENANT_PER_DAY` (default 1000).
     pub amazon_requests_per_day: u32,
-    /// `SEARCH_MAX_OFFERS_PER_RETAILER` (default 3, 1–20): offers per
-    /// retailer matched and priced by a search.
+    /// `SEARCH_MAX_OFFERS_PER_RETAILER` (default 3, or
+    /// [`DEMO_SEARCH_MAX_OFFERS`] in demo mode; 1–20): offers per retailer
+    /// matched and priced by a search.
     pub search_max_offers_per_retailer: usize,
     /// `REFRESH_BATCH_SIZE` (default 25, 1–50): SKUs per refresh run.
     pub refresh_batch_size: usize,
@@ -58,7 +59,9 @@ pub struct WorkerConfig {
     /// `DEMO_DATA` (default `false`; exactly `true` or `false`): serve the
     /// demo catalog through a fake Bright Data connector, with no network
     /// calls (ADR 0016). It also raises the default Bright Data caps to
-    /// [`DEMO_CAPS`], since nothing is paid; set caps still win.
+    /// [`DEMO_CAPS`] and the offers per retailer to
+    /// [`DEMO_SEARCH_MAX_OFFERS`], since nothing is paid; set values still
+    /// win.
     pub demo_data: bool,
 }
 
@@ -70,6 +73,10 @@ pub const DEMO_CAPS: Caps = Caps {
     max_items_per_tenant_per_day: 1_000_000,
     max_items_per_run: 50,
 };
+
+/// Default offers per retailer in demo mode, so a keyword-group search
+/// (`cocina`, …) matches every catalog listing of each store.
+pub const DEMO_SEARCH_MAX_OFFERS: usize = 10;
 
 fn flag(lookup: &impl Fn(&str) -> Option<String>, name: &'static str) -> Result<bool, ConfigError> {
     match lookup(name).as_deref().map(str::trim) {
@@ -173,7 +180,7 @@ impl WorkerConfig {
             search_max_offers_per_retailer: number(
                 &lookup,
                 "SEARCH_MAX_OFFERS_PER_RETAILER",
-                3,
+                if demo_data { DEMO_SEARCH_MAX_OFFERS } else { 3 },
                 1,
                 20,
             )?,
@@ -275,12 +282,15 @@ mod tests {
         let c = load(&[("DEMO_DATA", "true")]).unwrap();
         assert!(c.demo_data);
         assert_eq!(c.caps, DEMO_CAPS);
+        assert_eq!(c.search_max_offers_per_retailer, DEMO_SEARCH_MAX_OFFERS);
         let c = load(&[
             ("DEMO_DATA", "true"),
             ("BRIGHTDATA_MAX_RUNS_PER_TENANT_PER_DAY", "40"),
+            ("SEARCH_MAX_OFFERS_PER_RETAILER", "2"),
         ])
         .unwrap();
         assert_eq!(c.caps.max_runs_per_tenant_per_day, 40);
+        assert_eq!(c.search_max_offers_per_retailer, 2);
         assert_eq!(
             c.caps.max_items_per_tenant_per_day,
             DEMO_CAPS.max_items_per_tenant_per_day

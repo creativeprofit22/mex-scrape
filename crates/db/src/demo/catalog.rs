@@ -3,21 +3,18 @@
 //! the Amazon.com.mx product each one matches (or none).
 //!
 //! Two readers share it, both for local demos only: `seed_demo` writes a
-//! year of price history for every listing, and the worker's demo mode
-//! (`DEMO_DATA=true`) serves the listings as store pages and the Amazon
-//! products as Bright Data dataset records. Nothing here does I/O.
+//! year of price history for every listing and queues one search per
+//! keyword group, and the worker's demo mode (`DEMO_DATA=true`) serves the
+//! listings as store pages and the Amazon products as Bright Data dataset
+//! records. Nothing here does I/O.
 
 use std::collections::BTreeSet;
 
 use domain::{Asin, Gtin, RetailerSku};
 use serde::Deserialize;
 
-/// The demo account `seed_demo` creates; the demo worker runs only its
-/// searches.
-pub const DEMO_EMAIL: &str = "demo@example.com";
-
 /// The checked-in catalog.
-pub const DEMO_CATALOG_JSON: &str = include_str!("../../../config/demo_catalog.json");
+pub const DEMO_CATALOG_JSON: &str = include_str!("../../../../config/demo_catalog.json");
 
 /// How the worker is expected to match a product's listings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -47,6 +44,17 @@ pub struct DemoAmazon {
     pub fba_fee_centavos: i64,
 }
 
+/// Whether a store page shows the listing as buyable today.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ListingStock {
+    /// Buyable (the default when the catalog omits `availability`).
+    #[default]
+    InStock,
+    /// Shown, but sold out.
+    OutOfStock,
+}
+
 /// One store listing of a product.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -59,6 +67,9 @@ pub struct DemoListing {
     pub title: String,
     /// Today's price in centavos.
     pub price_centavos: i64,
+    /// Stock on the store page today; its history ends out of stock too.
+    #[serde(default)]
+    pub availability: ListingStock,
 }
 
 /// One product.
@@ -85,6 +96,9 @@ pub struct DemoProduct {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DemoCatalog {
+    /// Keyword groups (`cocina`, `electronica`, …): `seed_demo` queues one
+    /// demo-account search per group. Each is a keyword of some product.
+    pub groups: Vec<String>,
     /// Products in file order.
     pub products: Vec<DemoProduct>,
 }
@@ -103,6 +117,14 @@ pub enum DemoCatalogError {
         /// What is wrong.
         problem: &'static str,
     },
+    /// A keyword group breaks a rule.
+    #[error("demo catalog group {group}: {problem}")]
+    Group {
+        /// The group as written.
+        group: String,
+        /// What is wrong.
+        problem: &'static str,
+    },
 }
 
 impl DemoCatalog {
@@ -117,7 +139,8 @@ impl DemoCatalog {
 
     /// Parses and validates `json`: unique keys and listings, valid GTINs,
     /// ASINs and SKUs, positive prices, an Amazon product unless the
-    /// product is `no_match`, and a GTIN exactly for `accepted` ones.
+    /// product is `no_match`, a GTIN exactly for `accepted` ones, and
+    /// unique, trimmed groups that are each some product's keyword.
     ///
     /// # Errors
     ///
@@ -166,7 +189,30 @@ impl DemoCatalog {
                 }
             }
         }
+        let mut groups = BTreeSet::new();
+        for g in &catalog.groups {
+            let bad = |problem| DemoCatalogError::Group {
+                group: g.clone(),
+                problem,
+            };
+            if g.is_empty() || g.trim() != g {
+                return Err(bad("must be a non-empty trimmed word"));
+            }
+            if !groups.insert(g.as_str()) {
+                return Err(bad("duplicate group"));
+            }
+            if catalog.group_products(g).next().is_none() {
+                return Err(bad("no product has it as a keyword"));
+            }
+        }
         Ok(catalog)
+    }
+
+    /// The products whose keywords include `group`, in file order.
+    pub fn group_products<'a>(&'a self, group: &'a str) -> impl Iterator<Item = &'a DemoProduct> {
+        self.products
+            .iter()
+            .filter(move |p| p.keywords.iter().any(|k| k == group))
     }
 
     /// Every listing with its product, in file order.
@@ -193,13 +239,39 @@ mod tests {
             .map(|(_, l)| l.retailer.as_str())
             .collect();
         assert!(stores.len() >= 6, "{stores:?}");
+        for group in ["cocina", "electronica", "hogar", "herramientas", "despensa"] {
+            assert!(catalog.groups.iter().any(|g| g == group), "{group}");
+        }
+        let out = catalog
+            .listings()
+            .filter(|(_, l)| l.availability == ListingStock::OutOfStock)
+            .count();
+        assert!(out >= 3, "{out} out-of-stock listings");
+    }
+
+    #[test]
+    fn groups_must_be_unique_keywords() {
+        let with_groups = |groups: &str| {
+            format!(
+                r#"{{"groups":{groups},"products":[{{"key":"k","keywords":["x"],"brand":"B","gtin":null,
+                "amazon":null,"expected":"no_match","listings":[{{"retailer":"liverpool","sku":"1","title":"t","price_centavos":100,"availability":"out_of_stock"}}]}}]}}"#
+            )
+        };
+        let ok = DemoCatalog::parse(&with_groups(r#"["x"]"#)).unwrap();
+        let (_, listing) = ok.listings().next().unwrap();
+        assert_eq!(listing.availability, ListingStock::OutOfStock);
+        assert_eq!(ok.group_products("x").count(), 1);
+        for groups in [r#"["y"]"#, r#"["x","x"]"#, r#"[""]"#, r#"[" x"]"#] {
+            let error = DemoCatalog::parse(&with_groups(groups)).unwrap_err();
+            assert!(matches!(error, DemoCatalogError::Group { .. }), "{groups}");
+        }
     }
 
     #[test]
     fn rule_breaks_are_rejected_by_key() {
         let one = |gtin: &str, expected: &str| {
             format!(
-                r#"{{"products":[{{"key":"k","keywords":["x"],"brand":"B","gtin":{gtin},
+                r#"{{"groups":[],"products":[{{"key":"k","keywords":["x"],"brand":"B","gtin":{gtin},
                 "amazon":{{"asin":"B0DEMO0001","title":"t","brand":"B","price_centavos":100,"fba_fee_centavos":0}},
                 "expected":"{expected}","listings":[{{"retailer":"liverpool","sku":"1","title":"t","price_centavos":100}}]}}]}}"#
             )
@@ -215,7 +287,7 @@ mod tests {
             assert!(matches!(error, DemoCatalogError::Invalid { ref key, .. } if key == "k"));
         }
         assert!(matches!(
-            DemoCatalog::parse(r#"{"products":[],"extra":1}"#),
+            DemoCatalog::parse(r#"{"groups":[],"products":[],"extra":1}"#),
             Err(DemoCatalogError::Json(_))
         ));
     }

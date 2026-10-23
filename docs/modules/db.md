@@ -4,6 +4,12 @@
 
 Postgres access through sqlx, plus the schema migrations in `crates/db/migrations/`. Queries use runtime-checked `sqlx::query` so builds never need a live database.
 
+## Sub-docs
+
+| Doc | Covers |
+| --- | --- |
+| [demo-data](db/demo-data.md) | the demo catalog and its keyword groups, the per-group result mix, out-of-stock listings, the demo account's memberships (Sam's Club hidden), the seasonal price-history model, the queued group searches and their rerun rule, and how to run the demo with the assistant |
+
 ## Public API
 
 - `MIGRATOR`: embedded migrations.
@@ -40,25 +46,17 @@ Postgres access through sqlx, plus the schema migrations in `crates/db/migration
   - `complete [--watch]`: fills every queued or running search of that account with fixed results (including a `sams_mx` result that needs a membership the account lacks) and marks it `done`; `--watch` repeats every 500 ms. This replaces the worker in the e2e tests. The `costco_mx/E2E-COS-1` result is left `needs_review` (constants `REVIEW_RETAILER`/`REVIEW_SKU`); the scripted assistant model of the e2e suite proposes a decision for exactly that listing, so keep them in sync.
   - `reset-assistant`: deletes both e2e accounts' `match_decisions`, `match_suggestions` and `agent_token_usage` rows in one transaction, so the `needs_review` fixture is back (the assistant e2e spec runs it before and after; `seed` runs it too).
 
-- Binary `seed_demo` (local demos only; see [Demo data](#demo-data)).
+- Binary `seed_demo` (local demos only; [demo-data](db/demo-data.md)): orchestrates `demo::history`, `demo::account` and `demo::searches`, warns when the kill switch would refuse the searches, and logs a summary. Idempotent; it refuses a non-local `DATABASE_URL` (`require_local`, no opt-in) and never changes `safety_settings`.
 - `local_guard`: `is_local_target(&DatabaseUrl)` (TCP host `localhost`, `127.0.0.1` or `::1`; a Unix socket is not local), `check_target(url, allow_remote)` (`seed_e2e`: the `E2E_ALLOW_REMOTE_DB=true` opt-in) and `require_local(url)` (no opt-in: `seed_demo` and the worker's demo mode). Errors name variables only, never the URL.
-- `demo_catalog`: `DemoCatalog::embedded()` parses and validates `config/demo_catalog.json` (embedded at build time): unique keys and listings, valid GTINs, ASINs and SKUs, positive prices, a GTIN exactly for `accepted` products and an Amazon product unless `no_match`. Errors name the product key. Shared by `seed_demo` and the worker's `demo` module. `DEMO_EMAIL` names the demo account.
+- `demo` (local demos only; details in [demo-data](db/demo-data.md)):
+  - `catalog`: `DemoCatalog::embedded()` parses and validates `config/demo_catalog.json` (embedded at build time); `groups`, `group_products(group)`, `listings()`; listing `availability: ListingStock`. Errors (`DemoCatalogError`) name the product key or group. Shared with the worker's `demo` module.
+  - `history`: pure `daily_points(base, salt, today_day, days, sold_out)` (seasonal model), `hot_sale(year)`, `buen_fin(year)`, `civil_from_days`, `days_from_civil`, `weekday`, `salt`; `seed_history(pool, catalog, now_ms) -> HistoryReport { written, kept }` writes it for listings without history.
+  - `account`: `DEMO_EMAIL`, `DEMO_PASSWORD`, `DEMO_MEMBERSHIPS` (Costco only), `upsert_demo_account(pool, now_ms) -> UserRow`.
+  - `searches`: `groups_to_queue` (pure), `existing_queries(pool, tenant)` (not `failed`/`refused`), `queue_group_searches(pool, tenant, catalog, now_ms) -> QueueReport { queued, kept }` through `app::StartSearch` over `PgSearches`.
 
 ## Demo data
 
-Local demos only ([ADR 0016](../decisions/0016-demo-data-mode.md)). `config/demo_catalog.json` holds 20 Mexican retail products (blenders, air fryers, headphones, a TV, a console, diapers, coffee, …) with 50 listings at Walmart MX, Liverpool, Costco MX, Sam's Club MX, Chedraui, Bodega Aurrera and HEB MX. 14 match Amazon by GTIN (`accepted`; about half sell at a profit and half at a loss after fees), 4 only by title (`needs_review`) and 2 have no Amazon product. The worker's tests check that each one matches as declared.
-
-To turn it on (Postgres up, migrations applied, env from `.env.example`):
-
-1. `cargo run -p db --bin seed_demo`:
-   - for every catalog listing without history, 365 daily observations ending yesterday (a ±6 % wave with a 12 % one-week sale every 120 days, a few out-of-stock days); listings with history are skipped (observations are append-only);
-   - creates or resets the demo account `demo_catalog::DEMO_EMAIL` (`demo@example.com` / `demo-password-123`): Spanish, `free`, onboarded, Costco and Sam's Club memberships.
-
-   Idempotent. It refuses any non-local `DATABASE_URL` (`require_local`, no opt-in). It only reads `safety_settings` (warns if the kill switch is on) and writes no match.
-2. Start the worker with `DEMO_DATA=true` ([worker.md](worker.md#demo-mode)); it refuses to start without the demo account.
-3. Sign in as the demo account and search a catalog keyword; the seed's log lists them (`try_searching`). Searches, matches, ROI, the detail panel, the price chart and the product page then show demo data.
-
-The demo worker runs only the demo account's searches and passes the connector gate without `brightdata_enabled`, so the real connector flag is never turned on and the e2e account's searches are left for `seed_e2e complete`. Listing links point at the real stores with made-up SKUs. There is no Coppel adapter, so Coppel is not in the catalog.
+Moved to [demo-data](db/demo-data.md).
 
 ## Dependencies
 

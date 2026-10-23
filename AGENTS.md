@@ -23,11 +23,12 @@ Layout, module map and allowed crate dependencies: [docs/ARCHITECTURE.md](docs/A
 
 ### Demo data (local only)
 
-Fake but realistic data on every screen, through the real worker → db → API path ([ADR 0016](docs/decisions/0016-demo-data-mode.md); details in [docs/modules/db.md](docs/modules/db.md#demo-data)):
+Fake but realistic data on every screen, through the real worker → db → API path ([ADR 0016](docs/decisions/0016-demo-data-mode.md); details and full commands in [docs/modules/db/demo-data.md](docs/modules/db/demo-data.md)). Use a separate local database (e.g. `mex_scrape_demo`) and run `migrate` on it first.
 
-1. `cargo run -p db --bin seed_demo`: the demo login `demo@example.com` / `demo-password-123` and a year of prices for the 20 products in `config/demo_catalog.json`. It needs the env above, refuses a non-local `DATABASE_URL`, and is safe to rerun.
-2. Start the worker with `DEMO_DATA=true cargo run -p worker --bin worker`: a fake Bright Data connector serves the catalog, with no network calls and no change to the real connector flag.
-3. Sign in as the demo account and search a catalog keyword (`licuadora`, `audifonos`, `cocina`, `electronica`, …).
+1. `cargo run -p db --bin seed_demo`: the demo login `demo@example.com` / `demo-password-123` (Costco membership, no Sam's Club, so Sam's results show as hidden), a seasonal year of prices for the 25 products in `config/demo_catalog.json`, and one queued search per keyword group (`cocina`, `electronica`, `hogar`, `herramientas`, `despensa`). It needs the env above, refuses a non-local `DATABASE_URL`, and is safe to rerun (no duplicate searches).
+2. Start the worker with `DEMO_DATA=true cargo run -p worker --bin worker`: a fake Bright Data connector serves the catalog and runs the queued searches, with no network calls and no change to the real connector flag.
+3. Sign in as the demo account: product pages (e.g. `/es/products/B0DEMO0004`) and the assistant already have data, with no manual search; `/es/search?q=electronica` opens a group.
+4. Assistant: start the api with `AGENT_URL`, `AGENT_SERVICE_TOKEN` and `AGENT_GRANT_KEY`, and the sidecar with `AGENT_PROVIDER=palsu AGENT_ALLOW_FAKE_PROVIDER=true` (scripted fake model, no provider key).
 
 The demo worker runs only the demo account's searches, so it can stay up during `npm --prefix web run e2e` (e2e searches stay for `seed_e2e complete`).
 

@@ -1,4 +1,11 @@
 {
+  "groups": [
+    "cocina",
+    "electronica",
+    "hogar",
+    "herramientas",
+    "despensa"
+  ],
   "products": [
     {
       "key": "licuadora-oster",
@@ -99,7 +106,7 @@
           "retailer": "liverpool",
           "sku": "1100103",
           "title": "Cafetera Nespresso Vertuo Pop negro",
-          "price_centavos": 249900
+          "price_centavos": 274900
         },
         {
           "retailer": "walmart_mx",
@@ -288,7 +295,8 @@
           "retailer": "walmart_mx",
           "sku": "750100108",
           "title": "Taladro inalámbrico DeWalt 20V DCD777C2",
-          "price_centavos": 219900
+          "price_centavos": 219900,
+          "availability": "out_of_stock"
         },
         {
           "retailer": "costco_mx",
@@ -301,6 +309,74 @@
           "sku": "980100108",
           "title": "Taladro DeWalt DCD777C2 20V",
           "price_centavos": 194900
+        }
+      ]
+    },
+    {
+      "key": "rotomartillo-bosch",
+      "keywords": [
+        "rotomartillo",
+        "rotomartillos",
+        "bosch",
+        "herramienta",
+        "herramientas"
+      ],
+      "brand": "Bosch",
+      "gtin": "7509010001159",
+      "amazon": {
+        "asin": "B0DEMO0020",
+        "title": "Bosch Rotomartillo GSB 13 RE Professional 600 W",
+        "brand": "Bosch",
+        "price_centavos": 219900,
+        "fba_fee_centavos": 9000
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100123",
+          "title": "Rotomartillo Bosch GSB 13 RE 600 W",
+          "price_centavos": 189900
+        },
+        {
+          "retailer": "sams_mx",
+          "sku": "980100123",
+          "title": "Bosch Rotomartillo Professional GSB 13 RE",
+          "price_centavos": 184900
+        }
+      ]
+    },
+    {
+      "key": "desarmadores-truper",
+      "keywords": [
+        "desarmador",
+        "desarmadores",
+        "truper",
+        "herramienta",
+        "herramientas"
+      ],
+      "brand": "Truper",
+      "gtin": null,
+      "amazon": {
+        "asin": "B0DEMO0021",
+        "title": "Truper Juego de Desarmadores de Precisión 6 Piezas JDP-6",
+        "brand": "Truper",
+        "price_centavos": 24900,
+        "fba_fee_centavos": 4500
+      },
+      "expected": "needs_review",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100124",
+          "title": "Juego de desarmadores Truper 6 piezas",
+          "price_centavos": 15900
+        },
+        {
+          "retailer": "bodega_aurrera",
+          "sku": "750100125",
+          "title": "Desarmadores Truper precisión 6 pzas",
+          "price_centavos": 14900
         }
       ]
     },
@@ -443,7 +519,8 @@
           "retailer": "liverpool",
           "sku": "1100112",
           "title": "Consola Nintendo Switch OLED blanca",
-          "price_centavos": 749900
+          "price_centavos": 749900,
+          "availability": "out_of_stock"
         },
         {
           "retailer": "walmart_mx",
@@ -456,6 +533,40 @@
           "sku": "980100112",
           "title": "Nintendo Switch OLED Blanco",
           "price_centavos": 699900
+        }
+      ]
+    },
+    {
+      "key": "smartwatch-xiaomi",
+      "keywords": [
+        "smartwatch",
+        "reloj",
+        "xiaomi",
+        "band",
+        "electronica"
+      ],
+      "brand": "Xiaomi",
+      "gtin": null,
+      "amazon": {
+        "asin": "B0DEMO0019",
+        "title": "Xiaomi Smart Band 9 Reloj Inteligente Pantalla AMOLED Negro",
+        "brand": "Xiaomi",
+        "price_centavos": 89900,
+        "fba_fee_centavos": 5500
+      },
+      "expected": "needs_review",
+      "listings": [
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100122",
+          "title": "Smartwatch Xiaomi Smart Band 9 negro",
+          "price_centavos": 64900
+        },
+        {
+          "retailer": "sams_mx",
+          "sku": "980100122",
+          "title": "Reloj inteligente Xiaomi Band 9",
+          "price_centavos": 59900
         }
       ]
     },
@@ -484,7 +595,8 @@
           "retailer": "liverpool",
           "sku": "1100113",
           "title": "Aspiradora robot iRobot Roomba 694 Wi-Fi",
-          "price_centavos": 549900
+          "price_centavos": 549900,
+          "availability": "out_of_stock"
         },
         {
           "retailer": "costco_mx",
@@ -535,7 +647,75 @@
           "retailer": "heb_mx",
           "sku": "panales-huggies-supreme-etapa-4-80-pzas-100114",
           "title": "Pañales Huggies Supreme Etapa 4 80 pzas",
-          "price_centavos": 68900
+          "price_centavos": 68900,
+          "availability": "out_of_stock"
+        }
+      ]
+    },
+    {
+      "key": "nescafe-clasico",
+      "keywords": [
+        "nescafe",
+        "soluble",
+        "cafe",
+        "despensa"
+      ],
+      "brand": "Nescafé",
+      "gtin": "7509010001166",
+      "amazon": {
+        "asin": "B0DEMO0022",
+        "title": "Nescafé Clásico Café Soluble Frasco 225 g",
+        "brand": "Nescafé",
+        "price_centavos": 27900,
+        "fba_fee_centavos": 4500
+      },
+      "expected": "accepted",
+      "listings": [
+        {
+          "retailer": "heb_mx",
+          "sku": "nescafe-clasico-soluble-225-g-100126",
+          "title": "Nescafé Clásico café soluble 225 g",
+          "price_centavos": 13900
+        },
+        {
+          "retailer": "walmart_mx",
+          "sku": "750100126",
+          "title": "Café soluble Nescafé Clásico 225 g",
+          "price_centavos": 14900
+        },
+        {
+          "retailer": "chedraui",
+          "sku": "nescafe-clasico-soluble-225-g-100127",
+          "title": "Nescafé Clásico Soluble 225 g",
+          "price_centavos": 14500
+        }
+      ]
+    },
+    {
+      "key": "chile-guajillo",
+      "keywords": [
+        "chile",
+        "guajillo",
+        "chiles",
+        "seco",
+        "despensa"
+      ],
+      "brand": "La Huerta de Doña Mari",
+      "gtin": null,
+      "amazon": null,
+      "expected": "no_match",
+      "listings": [
+        {
+          "retailer": "heb_mx",
+          "sku": "chile-guajillo-seco-granel-250-gramos-100128",
+          "title": "Chile guajillo seco a granel 250 gramos",
+          "price_centavos": 4900
+        },
+        {
+          "retailer": "chedraui",
+          "sku": "chile-guajillo-seco-250-gramos-100129",
+          "title": "Chile Guajillo Seco 250 gramos",
+          "price_centavos": 5200
         }
       ]
     },
