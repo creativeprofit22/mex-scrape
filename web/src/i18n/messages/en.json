@@ -15,7 +15,9 @@
     "signOut": "Sign out",
     "skipToContent": "Skip to content",
     "switchLanguage": "Español",
-    "switchLanguageLabel": "Switch the language to Spanish"
+    "switchLanguageLabel": "Switch the language to Spanish",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode"
   },
   "common": {
     "loading": "Loading…",

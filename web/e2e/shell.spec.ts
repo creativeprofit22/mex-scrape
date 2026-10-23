@@ -177,6 +177,24 @@ async function currentItems(page: Page, label = t.nav.label): Promise<(string | 
   return result;
 }
 
+/** The colour tokens tokens.css redefines for dark, plus the painted page colours. */
+async function colourTokens(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() => {
+    const names = [
+      "--paper", "--sheet", "--tint", "--ink", "--muted", "--rule", "--rule-strong",
+      "--accent", "--accent-edge", "--accent-text", "--gain", "--loss", "--warn",
+    ];
+    const root = getComputedStyle(document.documentElement);
+    const body = getComputedStyle(document.body);
+    const result: Record<string, string> = {
+      background: body.backgroundColor,
+      text: body.color,
+    };
+    for (const name of names) result[name] = root.getPropertyValue(name).trim();
+    return result;
+  });
+}
+
 async function expectSignedOutLinks(page: Page): Promise<void> {
   await expect(links(page, t.nav.signIn).first()).toBeVisible();
   await expect(links(page, t.nav.signUp).first()).toBeVisible();
@@ -347,6 +365,45 @@ test.describe("desktop frame", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect.poll(() => api.localeSaves).toEqual(["en"]);
     expect(await currentItems(page, catalogs.en.nav.label)).toEqual([catalogs.en.nav.calculator]);
+    await expectAccessible(page);
+  });
+
+  test("the theme switch overrides the system scheme and is remembered", async ({ page }) => {
+    await fakeApi(page, { signedIn: true });
+    const html = page.locator("html");
+    const button = (name: string) =>
+      page.getByRole("button", { name, exact: true }).filter({ visible: true });
+
+    // Tokens the system light and dark schemes give, with nothing saved.
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto("/es/calculator");
+    await expect(html).not.toHaveAttribute("data-theme");
+    const systemLight = await colourTokens(page);
+    await page.emulateMedia({ colorScheme: "dark" });
+    const systemDark = await colourTokens(page);
+    expect(systemDark).not.toEqual(systemLight);
+
+    // System light → pick dark with the keyboard: same tokens as system dark.
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(button(t.nav.lightMode)).toHaveCount(0);
+    await tabTo(page, button(t.nav.darkMode));
+    await page.keyboard.press("Enter");
+    await expect(html).toHaveAttribute("data-theme", "dark");
+    await expect(button(t.nav.lightMode)).toBeFocused();
+    expect(await colourTokens(page)).toEqual(systemDark);
+    await expectAccessible(page);
+
+    // Kept across a reload, applied before the app hydrates.
+    await page.reload();
+    await expect(html).toHaveAttribute("data-theme", "dark");
+    await expect(button(t.nav.lightMode)).toBeVisible();
+    expect(await colourTokens(page)).toEqual(systemDark);
+
+    // System dark → pick light: same tokens as system light.
+    await page.emulateMedia({ colorScheme: "dark" });
+    await button(t.nav.lightMode).click();
+    await expect(html).toHaveAttribute("data-theme", "light");
+    expect(await colourTokens(page)).toEqual(systemLight);
     await expectAccessible(page);
   });
 });

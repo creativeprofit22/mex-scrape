@@ -8,11 +8,12 @@ import { NAV_ITEMS, navHref } from "@/lib/nav";
 import { AccountMenu, AccountMenuPlaceholder } from "./AccountMenu";
 import { FrameLanguage } from "./FrameLanguage";
 import { PrimaryNav } from "./PrimaryNav";
+import { ThemeToggle } from "./ThemeToggle";
 import { Wordmark } from "./Wordmark";
 
 /**
  * Desktop frame (≥768px): wordmark, workspace pages, then the account footer
- * (session links and language). Hidden below 768px, where the top bar and
+ * (session links, theme and language). Hidden below 768px, where the top bar and
  * bottom tabs take over.
  */
 export function Sidebar({ lang, dict }: { lang: Locale; dict: Dictionary }) {
@@ -35,6 +36,7 @@ export function Sidebar({ lang, dict }: { lang: Locale; dict: Dictionary }) {
         <Suspense fallback={<AccountMenuPlaceholder variant="sidebar" />}>
           <AccountMenu variant="sidebar" lang={lang} nav={dict.nav} plans={dict.account.plans} errors={dict.common.errors} />
         </Suspense>
+        <ThemeToggle nav={dict.nav} />
         <FrameLanguage lang={lang} nav={dict.nav} />
       </div>
     </header>

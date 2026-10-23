@@ -63,7 +63,7 @@ Slow and paid work runs as durable background jobs in the `worker` ([ADR 0011](d
 
 ## Accounts, sessions and the web app
 
-[ADR 0012](decisions/0012-session-auth-csrf-rate-limits-i18n.md), [ADR 0014](decisions/0014-web-design-system-and-app-shell.md); details in [api.md](modules/api.md), [web.md](modules/web.md) and [design-system.md](modules/web/design-system.md):
+[ADR 0012](decisions/0012-session-auth-csrf-rate-limits-i18n.md), [ADR 0014](decisions/0014-web-design-system-and-app-shell.md), [ADR 0015](decisions/0015-web-light-dark-switch.md); details in [api.md](modules/api.md), [web.md](modules/web.md) and [design-system.md](modules/web/design-system.md):
 
 - Users sign up with e-mail and password (Argon2id). `api` keeps server-side sessions in Postgres (`sessions`); the browser holds only an `HttpOnly`, `SameSite=Lax`, `Secure` session-id cookie. Every non-GET user route needs the session's `X-CSRF-Token` and a same-origin request, else 403.
 - Each user is their own tenant (`user-<id>`, a generated column), so searches are isolated at the data layer. Results that need a store membership the user lacks (Costco, Sam's Club) are hidden.

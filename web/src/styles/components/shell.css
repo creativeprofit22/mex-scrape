@@ -154,6 +154,37 @@
   }
 }
 
+/* Theme switch: names the scheme it goes to. Both labels are in the DOM and
+   the one for the scheme on screen shows, so it is right before hydration
+   (ADR 0015). Hidden labels are display:none, so only one is announced. */
+.theme-toggle__to-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle__to-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle__to-light {
+  display: inline;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle__to-dark {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .theme-toggle__to-light {
+    display: inline;
+  }
+}
+
+.top-bar__end {
+  display: flex;
+  align-items: center;
+  gap: 0 var(--space-4);
+}
+
 /* Same box loaded or not, so the session links never shift the frame. */
 .account-menu--sidebar {
   display: flex;
@@ -317,6 +348,11 @@
   .public-frame__header {
     padding-inline: max(var(--space-4), env(safe-area-inset-left, 0px))
       max(var(--space-4), env(safe-area-inset-right, 0px));
+  }
+
+  /* Session links, theme and language fit one row on a 390px phone. */
+  .public-frame__end {
+    column-gap: var(--space-3);
   }
 
   .public-frame__main {

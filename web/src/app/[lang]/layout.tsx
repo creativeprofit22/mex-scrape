@@ -3,6 +3,7 @@ import { Archivo } from "next/font/google";
 import { notFound } from "next/navigation";
 
 import { SessionProvider } from "@/components/shell/SessionProvider";
+import { ThemeScript } from "@/components/shell/ThemeScript";
 import { hasLocale, locales } from "@/i18n/config";
 import { getDictionary } from "@/i18n/dictionaries";
 
@@ -41,7 +42,9 @@ export async function generateMetadata({
 /**
  * Document root. The frame (`(app)` shell or `(public)` header) comes from the
  * route group's layout; each renders `<main id="main">` for the skip link.
- * The session lives here so both frames share one `GET /me`.
+ * The session lives here so both frames share one `GET /me`. The head script
+ * applies a saved light/dark choice before paint; it sets `data-theme` on
+ * `<html>`, hence `suppressHydrationWarning` there (ADR 0015).
  */
 export default async function RootLayout({
   children,
@@ -52,7 +55,10 @@ export default async function RootLayout({
   const dict = await getDictionary(lang);
 
   return (
-    <html lang={lang} className={archivo.variable}>
+    <html lang={lang} className={archivo.variable} suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body>
         <a className="skip-link" href="#main">
           {dict.nav.skipToContent}

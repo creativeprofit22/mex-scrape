@@ -5,11 +5,12 @@ import type { Dictionary } from "@/i18n/dictionaries";
 
 import { AccountMenu, AccountMenuPlaceholder } from "./AccountMenu";
 import { FrameLanguage } from "./FrameLanguage";
+import { ThemeToggle } from "./ThemeToggle";
 import { Wordmark } from "./Wordmark";
 
 /**
  * Minimal frame for home, sign-in and sign-up (style-pack §1a): wordmark,
- * session links and language; no sidebar, normal document scroll.
+ * session links, theme and language; no sidebar, normal document scroll.
  */
 export function PublicFrame({
   lang,
@@ -28,6 +29,7 @@ export function PublicFrame({
           <Suspense fallback={<AccountMenuPlaceholder variant="header" />}>
             <AccountMenu variant="header" lang={lang} nav={dict.nav} plans={dict.account.plans} errors={dict.common.errors} />
           </Suspense>
+          <ThemeToggle nav={dict.nav} />
           <FrameLanguage lang={lang} nav={dict.nav} />
         </div>
       </header>

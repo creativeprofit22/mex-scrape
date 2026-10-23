@@ -21,7 +21,7 @@ Later layers win whatever the specificity, so a component rule always beats a ba
 | `src/styles/layout.css` | `layout` | `.stack`, `.actions`, lone-link targets |
 | `src/styles/components/button.css` | `components` | primary `button` / `.button`, `button.secondary`, `.link-button`, `.plain-button` (opts out of all three for self-drawn controls), disabled, reduced motion |
 | `src/styles/components/field.css` | `components` | `.field` wrapper (red border from `[aria-invalid]`), `.text-field`, `.field-error`, `input`, `textarea`, `fieldset`, `legend`, `.check-group`, `.check-row` (large rows around a native checkbox) |
-| `src/styles/components/shell.css` | `components` | `.app-shell`, `.sidebar`, `.workspace`, `.top-bar`, `.bottom-tabs`, `.nav-list`, `.tab-list`, `.wordmark`, `.account-menu*`, `.public-frame*`, `.account-facts` ([app-shell](app-shell.md)) |
+| `src/styles/components/shell.css` | `components` | `.app-shell`, `.sidebar`, `.workspace`, `.top-bar`, `.bottom-tabs`, `.nav-list`, `.tab-list`, `.wordmark`, `.account-menu*`, `.theme-toggle*`, `.top-bar__end`, `.public-frame*`, `.account-facts` ([app-shell](app-shell.md)) |
 | `src/styles/components/tag.css` | `components` | `.tag`, `.tag-gain`, `.tag-warn`, `.tag-loss` |
 | `src/styles/components/feedback.css` | `components` | `.error`, `.hint`, `.load-error` |
 | `src/styles/components/card.css` | `components` | `.card` (centred form card), `.card__switch` ([pages](pages.md#shared-pieces)) |
@@ -39,7 +39,7 @@ The `utilities` layer is declared but empty; put single-purpose override classes
 
 ## Tokens
 
-Light values are listed; the dark block in `tokens.css` redefines the same names.
+Light values are listed; `tokens.css` redefines the same names for dark in two identical blocks: `:root[data-theme="dark"]` (picked with the switch) and `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` (the system default). Add a dark value to both; `e2e/shell.spec.ts` fails if they differ ([ADR 0015](../../decisions/0015-web-light-dark-switch.md)).
 
 | Token | Light | Use |
 | --- | --- | --- |

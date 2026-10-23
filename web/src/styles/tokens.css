@@ -1,6 +1,9 @@
 /*
  * Design tokens (style-pack §4). The only file with raw colour values.
- * Light first; the dark block redefines the same names. Contrast for every
+ * Light first; the dark values redefine the same names. They apply under the
+ * system dark scheme unless the user picked light, and whenever they picked
+ * dark (`<html data-theme>`, ADR 0015). The two dark blocks below must stay
+ * identical (e2e/shell.spec.ts compares them). Contrast for every
  * text, border, focus and fill pair was checked light and dark
  * (see sources#contrast-check): text ≥ 4.5, control borders and focus ≥ 3.
  */
@@ -70,8 +73,37 @@
   --press-ease: ease-out;
 }
 
+/* A saved choice wins over the system scheme; it also sets the native
+   colour scheme of form controls and scrollbars. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Dark, picked by the user. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #181614;
+  --sheet: #211e1b;
+  --tint: #3a1c29;
+
+  --ink: #f1ece4;
+  --muted: #aba398;
+  --rule: color-mix(in srgb, var(--ink) 14%, transparent);
+  --rule-strong: #706a61;
+
+  --accent: #cf1361;
+  --accent-edge: #8a0c40;
+  --accent-text: #ff5c9d;
+
+  --gain: #4cc38a;
+  --loss: #f07a5f;
+  --warn: #e8b04a;
+}
+
+/* Dark, from the system, unless the user picked light. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --paper: #181614;
     --sheet: #211e1b;
     --tint: #3a1c29;

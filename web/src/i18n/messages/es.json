@@ -15,7 +15,9 @@
     "signOut": "Cerrar sesión",
     "skipToContent": "Saltar al contenido",
     "switchLanguage": "English",
-    "switchLanguageLabel": "Cambiar el idioma a inglés"
+    "switchLanguageLabel": "Cambiar el idioma a inglés",
+    "darkMode": "Modo oscuro",
+    "lightMode": "Modo claro"
   },
   "common": {
     "loading": "Cargando…",
