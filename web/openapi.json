@@ -790,6 +790,16 @@
               }
             }
           },
+          "404": {
+            "description": "`product_not_found`: the ASIN has no match and no stored name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "`days` outside 1–365",
             "content": {
@@ -1401,6 +1411,16 @@
               }
             }
           },
+          "404": {
+            "description": "`product_not_found`: the ASIN has no match and no stored name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "`days` outside 1–365",
             "content": {
@@ -1490,6 +1510,16 @@
           },
           "401": {
             "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`product_not_found`: the ASIN has no match and no stored name",
             "content": {
               "application/json": {
                 "schema": {
@@ -2362,6 +2392,13 @@
             "type": "string",
             "description": "The Amazon product."
           },
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Amazon brand, when known."
+          },
           "hidden_listings": {
             "type": "integer",
             "format": "int32",
@@ -2379,6 +2416,13 @@
             "type": "integer",
             "format": "int64",
             "description": "Start of the series (epoch milliseconds)."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Amazon product name, when the worker has stored one (absent for\nproducts matched before names were kept)."
           }
         }
       },
@@ -2401,6 +2445,13 @@
             "type": "string",
             "description": "The Amazon product."
           },
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Amazon brand, when known."
+          },
           "hidden_listings": {
             "type": "integer",
             "format": "int32",
@@ -2413,6 +2464,13 @@
               "$ref": "#/components/schemas/ListingPriceStatsResponse"
             },
             "description": "One entry per accepted listing the user may see, sorted by retailer\nthen SKU."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Amazon product name, when the worker has stored one (absent for\nproducts matched before names were kept)."
           }
         }
       },

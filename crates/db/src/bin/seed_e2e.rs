@@ -7,7 +7,8 @@
 //! - `seed_e2e seed`: creates (or resets) the account `E2E_EMAIL`
 //!   (default `e2e@example.com`) with password `E2E_PASSWORD` (default
 //!   below, at least 8 characters), onboarded with a Costco membership and
-//!   Spanish locale; accepted matches of three listings to [`ASIN`]; and
+//!   Spanish locale; the Amazon name of [`ASIN`]; accepted matches of three
+//!   listings to it; and
 //!   400 days of daily price observations for them (only for listings with
 //!   no history yet, as observations are append-only). It also creates (or
 //!   resets) `E2E_PENDING_EMAIL` (default `e2e-pending@example.com`, same
@@ -20,6 +21,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, bail};
 use db::DatabaseUrl;
+use db::amazon_products::ProductRow;
 use db::local_guard::{ALLOW_REMOTE_ENV, check_target};
 use db::price_history::MatchRow;
 use db::searches::{RetailerOutcomeRow, SearchResultRow};
@@ -27,6 +29,9 @@ use sqlx::{PgPool, Row as _};
 
 /// The Amazon product every seeded listing is matched to.
 const ASIN: &str = "B0E2ETEST1";
+/// Amazon name and brand stored for [`ASIN`] (the product page heading).
+const PRODUCT_TITLE: &str = "Licuadora de prueba E2E 600 W";
+const PRODUCT_BRAND: &str = "Marca E2E";
 
 /// The listing whose match `complete` leaves `needs_review`. The scripted
 /// assistant model used by the e2e suite (`services/agent`, fake provider)
@@ -210,6 +215,19 @@ async fn seed(pool: &PgPool) -> anyhow::Result<()> {
     .context("resetting onboarding")?;
 
     reset_assistant(pool).await?;
+
+    db::amazon_products::upsert_product(
+        pool,
+        &ProductRow {
+            asin: ASIN.to_owned(),
+            title: PRODUCT_TITLE.to_owned(),
+            brand: Some(PRODUCT_BRAND.to_owned()),
+            source: "sp_api".to_owned(),
+            seen_at_ms: now,
+        },
+    )
+    .await
+    .context("storing the Amazon name")?;
 
     for (retailer, sku, base) in LISTINGS {
         db::price_history::upsert_match(

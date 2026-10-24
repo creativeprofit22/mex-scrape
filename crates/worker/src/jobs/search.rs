@@ -277,6 +277,7 @@ pub async fn run<T: Transport, S: RunStore, C: JobClock>(
                 match match_and_store(
                     &amazon,
                     ctx.matches,
+                    ctx.products,
                     ctx.prices,
                     offer,
                     ctx.match_config,

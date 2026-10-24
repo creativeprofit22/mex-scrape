@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use app::{AmazonDataSource, CatalogItem, CatalogResult};
 use brightdata::{DatasetTrigger, Download, SnapshotStatus, TargetUrl, Transport as _};
 use db::demo::account::DEMO_MEMBERSHIPS;
 use db::demo::catalog::{DemoCatalog, Expected, ListingStock};
@@ -18,7 +19,7 @@ use serde_json::{Value, json};
 use super::transport::{AMAZON_MX, decode_url};
 use super::{DemoFees, DemoTransport, REFERRAL_FEE_PERCENT};
 use crate::config::DEMO_SEARCH_MAX_OFFERS;
-use crate::offer_matching::keyword_query;
+use crate::offer_matching::{keyword_query, matched_product};
 
 fn transport() -> DemoTransport {
     DemoTransport::new(DemoCatalog::embedded().unwrap())
@@ -308,6 +309,63 @@ fn matches_come_out_as_the_catalog_expects() {
             assert_eq!(m.asin.as_str(), a.asin);
         }
     }
+}
+
+/// The catalog result the Bright Data Amazon source builds from the fake's
+/// records (`asin`, `title`, `brand`).
+fn catalog_result(records: &[Value]) -> CatalogResult {
+    CatalogResult {
+        items: records
+            .iter()
+            .map(|r| CatalogItem {
+                asin: Asin::new(r["asin"].as_str().unwrap()).unwrap(),
+                title: r["title"].as_str().unwrap().to_owned(),
+                brand: r["brand"].as_str().map(str::to_owned),
+                images: Vec::new(),
+                sales_ranks: Vec::new(),
+            })
+            .collect(),
+        source: AmazonDataSource::BrightData,
+        fetched_at: UnixMillis(0),
+    }
+}
+
+/// Every matched demo product gets the catalog's Amazon name and brand
+/// stored, so demo product pages show real names (ADR 0017).
+#[test]
+fn matched_products_store_the_catalog_amazon_name() {
+    let t = transport();
+    let mut named = 0;
+    for (product, listing) in t.catalog.listings() {
+        let (Some(amazon), Expected::Accepted | Expected::NeedsReview) =
+            (&product.amazon, product.expected)
+        else {
+            continue;
+        };
+        let store = adapter(&listing.retailer);
+        let url = store.search_url(&product.keywords[0]).unwrap();
+        let offers = store.parse_search(&fetch(&t, &url)).unwrap();
+        let offer = offers
+            .iter()
+            .find(|o| o.retailer_sku.as_str() == listing.sku)
+            .unwrap();
+        let found = match_offer_like_the_worker(&t, offer).expect("expected a match");
+        let gtin = offer
+            .gtin
+            .as_ref()
+            .map(|g| catalog_result(&t.records(&json!({"keywords": g.as_str()}))));
+        let keyword = gtin.as_ref().is_none_or(|r| r.items.is_empty()).then(|| {
+            let q = keyword_query(offer.brand.as_deref(), &offer.title);
+            catalog_result(&t.records(&json!({"keywords": q})))
+        });
+        let stored = matched_product(&found, gtin.as_ref(), keyword.as_ref())
+            .unwrap_or_else(|| panic!("no name for {}", product.key));
+        assert_eq!(stored.asin.as_str(), amazon.asin, "{}", product.key);
+        assert_eq!(stored.title, amazon.title, "{}", product.key);
+        assert_eq!(stored.brand.as_deref(), Some(amazon.brand.as_str()));
+        named += 1;
+    }
+    assert!(named > 0);
 }
 
 #[test]

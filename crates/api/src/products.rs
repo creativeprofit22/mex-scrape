@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use app::{
-    MAX_SERIES_DAYS, PriceSeries, PriceSeriesError, PriceStats, ProductPriceSeries,
-    ProductPriceStats,
+    MAX_SERIES_DAYS, PriceSeries, PriceSeriesError, PriceStats, PriceStatsError,
+    ProductPriceSeries, ProductPriceStats,
 };
 use axum::Json;
 use axum::extract::rejection::QueryRejection;
@@ -54,6 +54,33 @@ fn parse_asin(raw: &str) -> Result<Asin, ApiError> {
     Asin::new(raw).map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_asin"))
 }
 
+/// The ASIN has no match in any status and no stored Amazon name: distinct
+/// from a known product that has no price history yet (200, no listings).
+const PRODUCT_NOT_FOUND: ApiError = ApiError(StatusCode::NOT_FOUND, "product_not_found");
+
+/// HTTP answer for a price stats failure (shared with the agent route).
+pub(crate) fn stats_error(e: PriceStatsError) -> ApiError {
+    match e {
+        PriceStatsError::NotFound => PRODUCT_NOT_FOUND,
+        PriceStatsError::Storage => {
+            tracing::warn!("reading price stats failed");
+            ApiError::INTERNAL
+        }
+    }
+}
+
+/// HTTP answer for a price series failure (shared with the agent route).
+pub(crate) fn series_error(e: PriceSeriesError) -> ApiError {
+    match e {
+        PriceSeriesError::InvalidDays => ApiError(StatusCode::UNPROCESSABLE_ENTITY, "invalid_days"),
+        PriceSeriesError::NotFound => PRODUCT_NOT_FOUND,
+        PriceSeriesError::Storage => {
+            tracing::warn!("reading the price series failed");
+            ApiError::INTERNAL
+        }
+    }
+}
+
 /// Low, high and average price over one window. Amounts are integer
 /// centavos; they are absent when no in-stock price was observed.
 #[derive(Debug, Serialize, ToSchema)]
@@ -86,6 +113,11 @@ pub struct ListingPriceStatsResponse {
 pub struct PriceStatsResponse {
     /// The Amazon product.
     pub asin: String,
+    /// Amazon product name, when the worker has stored one (absent for
+    /// products matched before names were kept).
+    pub title: Option<String>,
+    /// Amazon brand, when known.
+    pub brand: Option<String>,
     /// Instant every window ends at (epoch milliseconds).
     pub as_of_ms: i64,
     /// One entry per accepted listing the user may see, sorted by retailer
@@ -116,6 +148,8 @@ impl From<ProductPriceStats> for PriceStatsResponse {
     fn from(s: ProductPriceStats) -> Self {
         Self {
             asin: s.asin.as_str().to_owned(),
+            title: s.title,
+            brand: s.brand,
             as_of_ms: s.as_of.0,
             listings: s
                 .listings
@@ -160,6 +194,11 @@ pub struct ListingPriceSeriesResponse {
 pub struct PriceHistoryResponse {
     /// The Amazon product.
     pub asin: String,
+    /// Amazon product name, when the worker has stored one (absent for
+    /// products matched before names were kept).
+    pub title: Option<String>,
+    /// Amazon brand, when known.
+    pub brand: Option<String>,
     /// Start of the series (epoch milliseconds).
     pub since_ms: i64,
     /// End of the series (epoch milliseconds).
@@ -176,6 +215,8 @@ impl From<ProductPriceSeries> for PriceHistoryResponse {
     fn from(s: ProductPriceSeries) -> Self {
         Self {
             asin: s.asin.as_str().to_owned(),
+            title: s.title,
+            brand: s.brand,
             since_ms: s.since.0,
             as_of_ms: s.as_of.0,
             listings: s
@@ -224,6 +265,7 @@ pub struct PriceHistoryQuery {
         (status = OK, description = "Price stats per listing", body = PriceStatsResponse),
         (status = BAD_REQUEST, description = "Not a valid ASIN", body = ErrorResponse),
         (status = UNAUTHORIZED, description = "Not signed in", body = ErrorResponse),
+        (status = NOT_FOUND, description = "`product_not_found`: the ASIN has no match and no stored name", body = ErrorResponse),
         (status = TOO_MANY_REQUESTS, description = "Plan rate limit reached", body = ErrorResponse),
         (status = INTERNAL_SERVER_ERROR, description = "Price history could not be read", body = ErrorResponse),
         (status = SERVICE_UNAVAILABLE, description = "Price history is not configured", body = ErrorResponse)
@@ -241,10 +283,7 @@ pub(crate) async fn product_price_stats(
         .stats
         .for_product(&user.tenant, &asin, user.memberships)
         .await
-        .map_err(|_| {
-            tracing::warn!("reading price stats failed");
-            ApiError::INTERNAL
-        })?;
+        .map_err(stats_error)?;
     Ok(Json(out.into()))
 }
 
@@ -265,6 +304,7 @@ pub(crate) async fn product_price_stats(
         (status = OK, description = "Daily series per listing", body = PriceHistoryResponse),
         (status = BAD_REQUEST, description = "Not a valid ASIN or query", body = ErrorResponse),
         (status = UNAUTHORIZED, description = "Not signed in", body = ErrorResponse),
+        (status = NOT_FOUND, description = "`product_not_found`: the ASIN has no match and no stored name", body = ErrorResponse),
         (status = UNPROCESSABLE_ENTITY, description = "`days` outside 1–365", body = ErrorResponse),
         (status = TOO_MANY_REQUESTS, description = "Plan rate limit reached", body = ErrorResponse),
         (status = INTERNAL_SERVER_ERROR, description = "Price history could not be read", body = ErrorResponse),
@@ -282,18 +322,10 @@ pub(crate) async fn product_price_history(
     let asin = parse_asin(&asin)?;
     let Query(query) = query.map_err(|_| ApiError(StatusCode::BAD_REQUEST, "invalid_query"))?;
     let days = query.days.unwrap_or(MAX_SERIES_DAYS);
-    match inner
+    let out = inner
         .series
         .for_product(&user.tenant, &asin, days, user.memberships)
         .await
-    {
-        Ok(out) => Ok(Json(out.into())),
-        Err(PriceSeriesError::InvalidDays) => {
-            Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY, "invalid_days"))
-        }
-        Err(PriceSeriesError::Storage) => {
-            tracing::warn!("reading the price series failed");
-            Err(ApiError::INTERNAL)
-        }
-    }
+        .map_err(series_error)?;
+    Ok(Json(out.into()))
 }

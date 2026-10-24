@@ -8,6 +8,7 @@ use api::auth::hasher::Argon2Hasher;
 use app::{AccessReport, Clock, PriceSeries, PriceStats, SearchResults, StartSearch, TokenCaps};
 use axum::http::HeaderName;
 use db::access::PgAccessCounts;
+use db::amazon_products::PgAmazonProducts;
 use db::assistant::{PgAgentUsage, PgMatchDecisions};
 use db::price_history::{PgMatches, PgPriceHistory};
 use db::searches::PgSearches;
@@ -32,7 +33,8 @@ fn price_stats(pool: db::PgPool) -> PriceStats {
     PriceStats::new(
         Arc::new(PgPriceHistory(pool.clone())),
         Arc::new(PgMatches(pool.clone())),
-        Arc::new(PgMatchDecisions::new(pool)),
+        Arc::new(PgMatchDecisions::new(pool.clone())),
+        Arc::new(PgAmazonProducts(pool)),
         Arc::new(SystemClock),
     )
 }
@@ -42,7 +44,8 @@ fn price_series(pool: db::PgPool) -> PriceSeries {
     PriceSeries::new(
         Arc::new(PgPriceHistory(pool.clone())),
         Arc::new(PgMatches(pool.clone())),
-        Arc::new(PgMatchDecisions::new(pool)),
+        Arc::new(PgMatchDecisions::new(pool.clone())),
+        Arc::new(PgAmazonProducts(pool)),
         Arc::new(SystemClock),
     )
 }

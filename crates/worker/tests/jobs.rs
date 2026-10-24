@@ -22,6 +22,7 @@ use brightdata::{
     UnlockRequest, UnlockedPage,
 };
 use db::DatabaseUrl;
+use db::amazon_products::{self, PgAmazonProducts};
 use db::brightdata_runs::{self, SafetySettings};
 use db::price_history::{PgMatches, PgPriceHistory};
 use db::queue::{self, Queue};
@@ -253,6 +254,7 @@ struct Harness {
     budget: Arc<PgRequestBudget>,
     prices: PgPriceHistory,
     matches: PgMatches,
+    products: PgAmazonProducts,
     match_config: MatchConfig,
     health: Mutex<ParseHealth>,
     listings: Vec<CategoryListing>,
@@ -319,6 +321,7 @@ impl Harness {
             )),
             prices: PgPriceHistory(pool.clone()),
             matches: PgMatches(pool.clone()),
+            products: PgAmazonProducts(pool.clone()),
             match_config: MatchConfig::default(),
             health: Mutex::new(ParseHealth::new(HealthConfig::default())),
             transport: FakeTransport::new(page),
@@ -363,6 +366,7 @@ impl Harness {
             budget: Arc::clone(&self.budget) as Arc<dyn app::RequestBudget>,
             prices: &self.prices,
             matches: &self.matches,
+            products: &self.products,
             match_config: &self.match_config,
             health: &self.health,
             listings: &self.listings,
@@ -494,6 +498,14 @@ async fn search_job_writes_results_with_roi_and_marks_category_only_stores() {
         "{calls:?}"
     );
     assert!(h.amazon.calls() > 0);
+    // The matched product's Amazon name was stored (ADR 0017).
+    let product = amazon_products::find_product(&h.pool, "B0TESTJOB1")
+        .await
+        .unwrap()
+        .expect("amazon_products row for the matched ASIN");
+    assert!(!product.title.is_empty());
+    assert_eq!(product.source, "sp_api");
+    assert!(product.seen_at_ms >= h.amazon.now.0);
     // Another tenant cannot read it.
     assert!(repo.load(&unique_tenant(), id).await.unwrap().is_none());
 }

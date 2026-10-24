@@ -16,9 +16,9 @@ use api::{
     SearchesState, SessionConfig, SessionStoreHandle,
 };
 use app::{
-    ChatId, CreateUserError, HashError, MatchDecisionRepo, NewDecision, NewSuggestion,
-    PasswordHasher, PortFuture, RepoError, StoredDecision, SuggestionId, SuggestionView,
-    UserCredentials, UserRecord, UserRepo,
+    AmazonDataSource, AmazonProduct, AmazonProductRepo, ChatId, CreateUserError, HashError,
+    MatchDecisionRepo, NewDecision, NewSuggestion, PasswordHasher, PortFuture, RepoError,
+    StoredDecision, SuggestionId, SuggestionView, UserCredentials, UserRecord, UserRepo,
 };
 use async_trait::async_trait;
 use axum::Router;
@@ -152,6 +152,44 @@ impl UserRepo for FakeUsers {
         locale: Locale,
     ) -> PortFuture<'_, Result<Option<UserRecord>, RepoError>> {
         Box::pin(async move { self.update(id, |u| u.locale = locale) })
+    }
+}
+
+/// Stored Amazon names in memory, keyed by ASIN.
+#[derive(Default)]
+pub struct MemoryProducts(pub Mutex<HashMap<String, AmazonProduct>>);
+
+impl MemoryProducts {
+    /// One stored name for `asin`.
+    pub fn named(asin: &str, title: &str, brand: Option<&str>) -> Self {
+        let product = AmazonProduct::new(
+            Asin::new(asin).unwrap(),
+            title,
+            brand,
+            AmazonDataSource::SpApi,
+            domain::UnixMillis(0),
+        )
+        .unwrap();
+        Self(Mutex::new(HashMap::from([(asin.to_owned(), product)])))
+    }
+}
+
+impl AmazonProductRepo for MemoryProducts {
+    fn upsert<'a>(&'a self, product: &'a AmazonProduct) -> PortFuture<'a, Result<(), RepoError>> {
+        Box::pin(async move {
+            self.0
+                .lock()
+                .unwrap()
+                .insert(product.asin.as_str().to_owned(), product.clone());
+            Ok(())
+        })
+    }
+
+    fn find<'a>(
+        &'a self,
+        asin: &'a Asin,
+    ) -> PortFuture<'a, Result<Option<AmazonProduct>, RepoError>> {
+        Box::pin(async move { Ok(self.0.lock().unwrap().get(asin.as_str()).cloned()) })
     }
 }
 

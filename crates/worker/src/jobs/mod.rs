@@ -11,7 +11,7 @@ pub mod search;
 
 use std::sync::{Arc, Mutex};
 
-use app::{GatedAmazonSource, MatchRepo, PriceHistoryRepo, RequestBudget};
+use app::{AmazonProductRepo, GatedAmazonSource, MatchRepo, PriceHistoryRepo, RequestBudget};
 use brightdata::Transport;
 use brightdata::runs::{GateError, RunError, RunStore, Runner};
 use db::PgPool;
@@ -235,6 +235,8 @@ pub struct JobContext<'a, T, S, C> {
     pub prices: &'a dyn PriceHistoryRepo,
     /// Match writes.
     pub matches: &'a dyn MatchRepo,
+    /// Amazon product name writes.
+    pub products: &'a dyn AmazonProductRepo,
     /// Matching thresholds.
     pub match_config: &'a MatchConfig,
     /// Shared retailer parse health.

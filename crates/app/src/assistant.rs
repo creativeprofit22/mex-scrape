@@ -582,7 +582,57 @@ pub(crate) mod fakes {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::ports::PortFuture;
+    use crate::ports::{AmazonDataSource, AmazonProduct, AmazonProductRepo, PortFuture};
+
+    /// Stored Amazon names: answers `find` with `product` for any ASIN.
+    #[derive(Default)]
+    pub(crate) struct FakeProducts {
+        pub(crate) product: Option<AmazonProduct>,
+        pub(crate) stored: Mutex<Vec<AmazonProduct>>,
+        pub(crate) fail: bool,
+    }
+
+    impl FakeProducts {
+        pub(crate) fn named(title: &str, brand: Option<&str>) -> Self {
+            Self {
+                product: AmazonProduct::new(
+                    Asin::new("B0DEMO0001").unwrap(),
+                    title,
+                    brand,
+                    AmazonDataSource::SpApi,
+                    UnixMillis(1),
+                ),
+                ..Self::default()
+            }
+        }
+    }
+
+    impl AmazonProductRepo for FakeProducts {
+        fn upsert<'a>(&'a self, p: &'a AmazonProduct) -> PortFuture<'a, Result<(), RepoError>> {
+            Box::pin(async move {
+                if self.fail {
+                    return Err(RepoError::Unavailable);
+                }
+                self.stored.lock().unwrap().push(p.clone());
+                Ok(())
+            })
+        }
+
+        fn find<'a>(
+            &'a self,
+            asin: &'a Asin,
+        ) -> PortFuture<'a, Result<Option<AmazonProduct>, RepoError>> {
+            Box::pin(async move {
+                if self.fail {
+                    return Err(RepoError::Unavailable);
+                }
+                Ok(self.product.clone().map(|p| AmazonProduct {
+                    asin: asin.clone(),
+                    ..p
+                }))
+            })
+        }
+    }
 
     /// Decisions and suggestions per tenant.
     #[derive(Default)]

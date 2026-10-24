@@ -647,6 +647,8 @@ export interface components {
             as_of_ms: number;
             /** @description The Amazon product. */
             asin: string;
+            /** @description Amazon brand, when known. */
+            brand?: string | null;
             /**
              * Format: int32
              * @description Listings left out because they need a store membership (Costco,
@@ -663,6 +665,11 @@ export interface components {
              * @description Start of the series (epoch milliseconds).
              */
             since_ms: number;
+            /**
+             * @description Amazon product name, when the worker has stored one (absent for
+             *     products matched before names were kept).
+             */
+            title?: string | null;
         };
         /** @description Price stats for an Amazon product across matched retailer listings. */
         PriceStatsResponse: {
@@ -673,6 +680,8 @@ export interface components {
             as_of_ms: number;
             /** @description The Amazon product. */
             asin: string;
+            /** @description Amazon brand, when known. */
+            brand?: string | null;
             /**
              * Format: int32
              * @description Listings left out because they need a store membership (Costco,
@@ -684,6 +693,11 @@ export interface components {
              *     then SKU.
              */
             listings: components["schemas"]["ListingPriceStatsResponse"][];
+            /**
+             * @description Amazon product name, when the worker has stored one (absent for
+             *     products matched before names were kept).
+             */
+            title?: string | null;
         };
         /**
          * @description Low, high and average price over one window. Amounts are integer
@@ -1635,6 +1649,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `product_not_found`: the ASIN has no match and no stored name */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `days` outside 1–365 */
             422: {
                 headers: {
@@ -2116,6 +2139,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `product_not_found`: the ASIN has no match and no stored name */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `days` outside 1–365 */
             422: {
                 headers: {
@@ -2186,6 +2218,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `product_not_found`: the ASIN has no match and no stored name */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,6 +1,7 @@
 //! Tests for `GET /products/{asin}/price-stats` and
 //! `GET /products/{asin}/price-history`: shape and values on fixed fixture
-//! data with an injected clock, plus 401/400/422/503/500.
+//! data with an injected clock, the stored Amazon name, plus
+//! 401/400/404/422/503/500.
 
 mod common;
 
@@ -12,7 +13,7 @@ use app::{
     UpsertOutcome,
 };
 use axum::http::{Method, StatusCode};
-use common::{TestApp, generous_limits};
+use common::{MemoryProducts, TestApp, generous_limits};
 use domain::{
     Asin, Availability, DAY_MS, Offer, PriceMxn, ProductMatch, RetailerId, RetailerSku, UnixMillis,
 };
@@ -54,7 +55,7 @@ impl PriceHistoryRepo for FakePrices {
     }
 }
 
-/// The accepted listings of every ASIN.
+/// The accepted listings of [`ASIN`]; other ASINs have no match.
 struct FakeMatches(Vec<(RetailerId, RetailerSku)>);
 
 impl MatchRepo for FakeMatches {
@@ -67,9 +68,15 @@ impl MatchRepo for FakeMatches {
 
     fn accepted_listings<'a>(
         &'a self,
-        _: &'a Asin,
+        asin: &'a Asin,
     ) -> PortFuture<'a, Result<Vec<(RetailerId, RetailerSku)>, RepoError>> {
-        Box::pin(async move { Ok(self.0.clone()) })
+        let known = asin.as_str() == ASIN;
+        Box::pin(async move { Ok(if known { self.0.clone() } else { vec![] }) })
+    }
+
+    fn has_any_match<'a>(&'a self, asin: &'a Asin) -> PortFuture<'a, Result<bool, RepoError>> {
+        let known = asin.as_str() == ASIN && !self.0.is_empty();
+        Box::pin(async move { Ok(known) })
     }
 }
 
@@ -107,19 +114,30 @@ fn enabled_with(
     prices: Result<Vec<PricePoint>, RepoError>,
     listings: Vec<(RetailerId, RetailerSku)>,
 ) -> ProductsState {
+    with_products(prices, listings, MemoryProducts::default())
+}
+
+fn with_products(
+    prices: Result<Vec<PricePoint>, RepoError>,
+    listings: Vec<(RetailerId, RetailerSku)>,
+    products: MemoryProducts,
+) -> ProductsState {
     let prices = Arc::new(FakePrices(prices));
     let matches = Arc::new(FakeMatches(listings));
+    let products = Arc::new(products);
     ProductsState::new(
         Arc::new(PriceStats::new(
             prices.clone(),
             matches.clone(),
             Arc::new(common::MemoryDecisions::default()),
+            products.clone(),
             Arc::new(FixedClock),
         )),
         Arc::new(PriceSeries::new(
             prices,
             matches,
             Arc::new(common::MemoryDecisions::default()),
+            products,
             Arc::new(FixedClock),
         )),
     )
@@ -151,6 +169,8 @@ async fn returns_windows_from_fixture_and_clock() {
         body,
         json!({
             "asin": ASIN,
+            "title": null,
+            "brand": null,
             "as_of_ms": NOW,
             "listings": [{
                 "retailer": "walmart_mx",
@@ -234,6 +254,59 @@ async fn membership_listings_are_hidden_unless_the_user_has_it() {
 }
 
 #[tokio::test]
+async fn both_routes_return_the_stored_amazon_name() {
+    for path in ["price-stats", "price-history"] {
+        let state = with_products(
+            Ok(fixture()),
+            vec![listing("walmart_mx", "W1")],
+            MemoryProducts::named(ASIN, "Licuadora Oster 600 W", Some("Oster")),
+        );
+        let reply = get(state, &format!("/products/{ASIN}/{path}")).await;
+        assert_eq!(reply.status, StatusCode::OK, "{path}");
+        assert_eq!(reply.body["title"], "Licuadora Oster 600 W", "{path}");
+        assert_eq!(reply.body["brand"], "Oster", "{path}");
+    }
+}
+
+#[tokio::test]
+async fn a_stored_name_alone_makes_the_product_known() {
+    // Named but no listing yet: 200 with no listings, not 404.
+    let state = with_products(
+        Ok(fixture()),
+        vec![],
+        MemoryProducts::named(ASIN, "Licuadora", None),
+    );
+    let reply = get(state, &format!("/products/{ASIN}/price-history")).await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(reply.body["title"], "Licuadora");
+    assert_eq!(reply.body["brand"], Value::Null);
+    assert_eq!(reply.body["listings"], json!([]));
+}
+
+#[tokio::test]
+async fn unknown_asin_is_404_product_not_found_on_both_routes() {
+    for path in ["price-stats", "price-history"] {
+        let reply = get(
+            enabled(Ok(fixture())),
+            &format!("/products/B0ZZZZZZZZ/{path}"),
+        )
+        .await;
+        assert_eq!(
+            (reply.status, reply.error()),
+            (StatusCode::NOT_FOUND, "product_not_found"),
+            "{path}"
+        );
+    }
+    // Days are checked first: a bad `days` is still 422 for an unknown ASIN.
+    let reply = get(
+        enabled(Ok(fixture())),
+        "/products/B0ZZZZZZZZ/price-history?days=0",
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
 async fn invalid_asin_is_400() {
     let (status, _) = call(enabled(Ok(fixture())), "not-an-asin").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -282,6 +355,8 @@ async fn history_returns_one_point_per_day_oldest_first() {
         reply.body,
         json!({
             "asin": ASIN,
+            "title": null,
+            "brand": null,
             "since_ms": NOW - 30 * DAY_MS,
             "as_of_ms": NOW,
             "listings": [{
@@ -360,4 +435,10 @@ async fn spec_documents_the_history_route() {
     assert_eq!(days["in"], "query");
     assert_eq!(days["required"], false);
     assert!(spec["components"]["schemas"]["PriceHistoryResponse"].is_object());
+    for path in ["price-history", "price-stats"] {
+        let route = &spec["paths"][format!("/products/{{asin}}/{path}")]["get"];
+        assert!(route["responses"]["404"].is_object(), "{path}");
+    }
+    let props = &spec["components"]["schemas"]["PriceHistoryResponse"]["properties"];
+    assert!(props["title"].is_object() && props["brand"].is_object());
 }

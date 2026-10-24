@@ -18,6 +18,7 @@ use brightdata::robots::{HttpRobotsSource, RobotsChecker};
 use brightdata::runs::{Runner, SystemClock, Timing};
 use db::DatabaseUrl;
 use db::access::PgAccessCounts;
+use db::amazon_products::PgAmazonProducts;
 use db::brightdata_runs::DriverLock;
 use db::demo::account::DEMO_EMAIL;
 use db::demo::catalog::DemoCatalog;
@@ -301,6 +302,7 @@ async fn drive<T: Transport + 'static>(
     };
     let prices = PgPriceHistory(pool.clone());
     let matches = PgMatches(pool.clone());
+    let products = PgAmazonProducts(pool.clone());
     let health = Mutex::new(ParseHealth::new(parse_health));
     let match_config = MatchConfig::default();
     let jobs = Jobs {
@@ -312,6 +314,7 @@ async fn drive<T: Transport + 'static>(
             budget,
             prices: &prices,
             matches: &matches,
+            products: &products,
             match_config: &match_config,
             health: &health,
             listings,

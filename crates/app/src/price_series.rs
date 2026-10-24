@@ -10,8 +10,11 @@ use domain::{
 };
 
 use crate::assistant::tenant_listings;
-use crate::ports::{Clock, MatchDecisionRepo, MatchRepo, PriceHistoryRepo, PricePoint};
+use crate::ports::{
+    AmazonProductRepo, Clock, MatchDecisionRepo, MatchRepo, PriceHistoryRepo, PricePoint,
+};
 use crate::price_stats::visible_listings;
+use crate::product;
 
 /// Longest series served, in days.
 pub const MAX_SERIES_DAYS: u16 = 365;
@@ -25,6 +28,10 @@ pub enum PriceSeriesError {
     /// Matches or price history could not be read.
     #[error("price history could not be read")]
     Storage,
+    /// The ASIN has no stored name, no match in any status and no listing
+    /// the reader sees: the product is unknown.
+    #[error("product not found")]
+    NotFound,
 }
 
 /// Prices of one listing on one UTC day.
@@ -56,6 +63,10 @@ pub struct ListingPriceSeries {
 pub struct ProductPriceSeries {
     /// The Amazon product.
     pub asin: Asin,
+    /// Product name on Amazon; `None` until a catalog lookup stored one.
+    pub title: Option<String>,
+    /// Brand on Amazon, when known.
+    pub brand: Option<String>,
     /// First instant covered.
     pub since: UnixMillis,
     /// When the series was built.
@@ -73,6 +84,7 @@ pub struct PriceSeries {
     prices: Arc<dyn PriceHistoryRepo>,
     matches: Arc<dyn MatchRepo>,
     decisions: Arc<dyn MatchDecisionRepo>,
+    products: Arc<dyn AmazonProductRepo>,
     clock: Arc<dyn Clock>,
 }
 
@@ -84,12 +96,14 @@ impl PriceSeries {
         prices: Arc<dyn PriceHistoryRepo>,
         matches: Arc<dyn MatchRepo>,
         decisions: Arc<dyn MatchDecisionRepo>,
+        products: Arc<dyn AmazonProductRepo>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         Self {
             prices,
             matches,
             decisions,
+            products,
             clock,
         }
     }
@@ -103,7 +117,8 @@ impl PriceSeries {
     ///
     /// # Errors
     /// [`PriceSeriesError::InvalidDays`] unless `1 <= days <= 365`;
-    /// [`PriceSeriesError::Storage`] if storage cannot be read.
+    /// [`PriceSeriesError::Storage`] if storage cannot be read;
+    /// [`PriceSeriesError::NotFound`] if the product is unknown.
     pub async fn for_product(
         &self,
         tenant: &TenantId,
@@ -120,6 +135,15 @@ impl PriceSeries {
             tenant_listings(self.matches.as_ref(), self.decisions.as_ref(), tenant, asin)
                 .await
                 .map_err(|_| PriceSeriesError::Storage)?;
+        let name = product::lookup(
+            self.matches.as_ref(),
+            self.products.as_ref(),
+            asin,
+            !listings.is_empty(),
+        )
+        .await
+        .map_err(|_| PriceSeriesError::Storage)?
+        .ok_or(PriceSeriesError::NotFound)?;
         let (listings, hidden_listings) = visible_listings(listings, memberships);
         let mut out = Vec::with_capacity(listings.len());
         for (retailer, retailer_sku) in listings {
@@ -136,6 +160,8 @@ impl PriceSeries {
         }
         Ok(ProductPriceSeries {
             asin: asin.clone(),
+            title: name.title,
+            brand: name.brand,
             since,
             as_of: now,
             listings: out,
@@ -171,7 +197,7 @@ mod tests {
     use domain::{Offer, ProductMatch};
 
     use super::*;
-    use crate::assistant::fakes::FakeDecisions;
+    use crate::assistant::fakes::{FakeDecisions, FakeProducts};
 
     fn me() -> domain::TenantId {
         domain::TenantId::new("user-7").unwrap()
@@ -229,6 +255,10 @@ mod tests {
         ) -> PortFuture<'a, Result<Vec<(RetailerId, RetailerSku)>, RepoError>> {
             Box::pin(async move { Ok(self.0.clone()) })
         }
+
+        fn has_any_match<'a>(&'a self, _: &'a Asin) -> PortFuture<'a, Result<bool, RepoError>> {
+            Box::pin(async move { Ok(!self.0.is_empty()) })
+        }
     }
 
     fn price(c: i64) -> PriceMxn {
@@ -267,6 +297,7 @@ mod tests {
             Arc::new(prices),
             Arc::new(FakeMatches(keys)),
             Arc::new(FakeDecisions::default()),
+            Arc::new(FakeProducts::named("Licuadora", Some("Oster"))),
             Arc::new(FixedClock),
         )
     }
@@ -357,6 +388,34 @@ mod tests {
         assert_eq!(
             bad.for_product(&me(), &asin, 365, NONE).await,
             Err(PriceSeriesError::Storage)
+        );
+    }
+
+    #[tokio::test]
+    async fn names_known_products_and_refuses_unknown_ones() {
+        let asin = Asin::new("B000000001").unwrap();
+        let named = series(FakePrices(Ok(Vec::new())), 1)
+            .for_product(&me(), &asin, 30, NONE)
+            .await
+            .unwrap();
+        assert_eq!(named.title.as_deref(), Some("Licuadora"));
+        assert_eq!(named.brand.as_deref(), Some("Oster"));
+
+        let unknown = PriceSeries::new(
+            Arc::new(FakePrices(Ok(Vec::new()))),
+            Arc::new(FakeMatches(vec![])),
+            Arc::new(FakeDecisions::default()),
+            Arc::new(FakeProducts::default()),
+            Arc::new(FixedClock),
+        );
+        assert_eq!(
+            unknown.for_product(&me(), &asin, 30, NONE).await,
+            Err(PriceSeriesError::NotFound)
+        );
+        // Days are checked before the product.
+        assert_eq!(
+            unknown.for_product(&me(), &asin, 0, NONE).await,
+            Err(PriceSeriesError::InvalidDays)
         );
     }
 }

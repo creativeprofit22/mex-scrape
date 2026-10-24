@@ -13,6 +13,7 @@ pub mod assistant;
 pub mod ports;
 pub mod price_series;
 pub mod price_stats;
+pub mod product;
 pub mod roi;
 pub mod search;
 
@@ -27,19 +28,21 @@ pub use assistant::{
     TRACKED_DAYS, TokenCaps, TrackedOffers, TrackedOffersView, TrackedQuery, epoch_day,
 };
 pub use ports::{
-    AccessCountsRepo, AccessTotals, AgentUsageRepo, AmazonDataSource, AmazonSource,
-    AmazonSourceError, AssistantEngine, BudgetError, CatalogItem, CatalogResult, ChatId, Clock,
-    CreateUserError, EngineError, EngineReply, EngineRequest, FeeDetail, FeeEstimate, Fulfillment,
-    HashError, HostAccess, MatchDecisionRepo, MatchRepo, NewDecision, NewSuggestion, OfferSource,
-    OfferSourceError, OfferSummary, PasswordHasher, PortFuture, PriceHistoryRepo, PricePoint,
-    RecentResultsFilter, RepoError, RequestBudget, ResultMatchView, RetailerOutcomeView, SalesRank,
-    SearchId, SearchRepo, SearchResultView, SearchView, StoredDecision, SuggestionId,
-    SuggestionView, TrackedResultView, UpsertOutcome, UserCredentials, UserRecord, UserRepo,
+    AccessCountsRepo, AccessTotals, AgentUsageRepo, AmazonDataSource, AmazonProduct,
+    AmazonProductRepo, AmazonSource, AmazonSourceError, AssistantEngine, BudgetError, CatalogItem,
+    CatalogResult, ChatId, Clock, CreateUserError, EngineError, EngineReply, EngineRequest,
+    FeeDetail, FeeEstimate, Fulfillment, HashError, HostAccess, MatchDecisionRepo, MatchRepo,
+    NewDecision, NewSuggestion, OfferSource, OfferSourceError, OfferSummary, PasswordHasher,
+    PortFuture, PriceHistoryRepo, PricePoint, RecentResultsFilter, RepoError, RequestBudget,
+    ResultMatchView, RetailerOutcomeView, SalesRank, SearchId, SearchRepo, SearchResultView,
+    SearchView, StoredDecision, SuggestionId, SuggestionView, TrackedResultView, UpsertOutcome,
+    UserCredentials, UserRecord, UserRepo,
 };
 pub use price_series::{
     DailyPrice, ListingPriceSeries, MAX_SERIES_DAYS, PriceSeries, PriceSeriesError,
     ProductPriceSeries,
 };
 pub use price_stats::{ListingPriceStats, PriceStats, PriceStatsError, ProductPriceStats};
+pub use product::{MAX_BRAND_CHARS, MAX_TITLE_CHARS, ProductName};
 pub use roi::{MAX_ROI_BATCH, RoiBatch, RoiBatchError};
 pub use search::{SearchError, SearchResults, StartSearch};

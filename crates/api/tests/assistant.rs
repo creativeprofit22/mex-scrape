@@ -25,7 +25,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use axum::response::{IntoResponse as _, Response};
-use common::{Client, FakeUsers, MemoryDecisions, TestApp, generous_limits};
+use common::{Client, FakeUsers, MemoryDecisions, MemoryProducts, TestApp, generous_limits};
 use domain::{
     Asin, Availability, Confidence, DAY_MS, MatchStatus, Offer, PriceMxn, ProductMatch, RetailerId,
     RetailerSearchOutcome, RetailerSku, SearchQuery, SearchStatus, TenantId, TokenCount,
@@ -266,14 +266,24 @@ impl MatchRepo for FakeMatches {
 
     fn accepted_listings<'a>(
         &'a self,
-        _: &'a Asin,
+        asin: &'a Asin,
     ) -> PortFuture<'a, Result<Vec<(RetailerId, RetailerSku)>, RepoError>> {
-        Box::pin(async {
-            Ok(vec![(
-                RetailerId::new("walmart_mx").unwrap(),
-                RetailerSku::new("W1").unwrap(),
-            )])
+        let known = asin.as_str() == ASIN;
+        Box::pin(async move {
+            Ok(if known {
+                vec![(
+                    RetailerId::new("walmart_mx").unwrap(),
+                    RetailerSku::new("W1").unwrap(),
+                )]
+            } else {
+                vec![]
+            })
         })
+    }
+
+    fn has_any_match<'a>(&'a self, asin: &'a Asin) -> PortFuture<'a, Result<bool, RepoError>> {
+        let known = asin.as_str() == ASIN;
+        Box::pin(async move { Ok(known) })
     }
 }
 
@@ -476,16 +486,19 @@ async fn world(opts: Options) -> World {
         }
         None => (None, None),
     };
+    let products = Arc::new(MemoryProducts::named(ASIN, "Licuadora de prueba", None));
     let stats = Arc::new(PriceStats::new(
         Arc::new(FakePrices),
         Arc::new(FakeMatches),
         decisions.clone(),
+        products.clone(),
         clock.clone(),
     ));
     let series = Arc::new(PriceSeries::new(
         Arc::new(FakePrices),
         Arc::new(FakeMatches),
         decisions.clone(),
+        products,
         clock.clone(),
     ));
     let assistant = AssistantState::new(AssistantDeps {
@@ -1017,6 +1030,21 @@ async fn tool_routes_validate_and_answer() {
             .unwrap()
             .len(),
         1
+    );
+    assert_eq!(body["stats"]["title"], "Licuadora de prueba");
+    assert_eq!(body["history"]["title"], "Licuadora de prueba");
+
+    let (status, body) = internal_call(
+        api,
+        Method::GET,
+        "/internal/agent/products/B0ZZZZZZZZ/price-history",
+        &g,
+        Value::Null,
+    )
+    .await;
+    assert_eq!(
+        (status, body["error"].as_str()),
+        (StatusCode::NOT_FOUND, Some("product_not_found"))
     );
 
     let (status, body) = internal_call(

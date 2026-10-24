@@ -91,6 +91,14 @@ impl AmazonDataSource {
             Self::BrightData => "bright_data",
         }
     }
+
+    /// The source named `name` (as [`Self::as_str`] writes it), if any.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::SpApi, Self::BrightData]
+            .into_iter()
+            .find(|s| s.as_str() == name)
+    }
 }
 
 /// A best-sellers rank of a catalog item in one category.
@@ -297,6 +305,44 @@ pub trait MatchRepo: Send + Sync {
         &'a self,
         asin: &'a Asin,
     ) -> PortFuture<'a, Result<Vec<(RetailerId, RetailerSku)>, RepoError>>;
+
+    /// Whether any listing is matched to `asin`, in any status (`rejected`
+    /// included): the product is known even when nothing is accepted.
+    fn has_any_match<'a>(&'a self, asin: &'a Asin) -> PortFuture<'a, Result<bool, RepoError>>;
+}
+
+/// The Amazon name and brand of a matched product, as seen in a catalog
+/// lookup (ADR 0017). Build it with [`AmazonProduct::new`] or
+/// [`AmazonProduct::from_catalog`], which normalize and bound the text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AmazonProduct {
+    /// Amazon product id.
+    pub asin: Asin,
+    /// Product name on Amazon: trimmed, single-spaced, 1 to
+    /// [`crate::product::MAX_TITLE_CHARS`] characters.
+    pub title: String,
+    /// Brand, when known: trimmed, single-spaced, 1 to
+    /// [`crate::product::MAX_BRAND_CHARS`] characters.
+    pub brand: Option<String>,
+    /// Provider that answered the lookup.
+    pub source: AmazonDataSource,
+    /// When the lookup was read.
+    pub seen_at: UnixMillis,
+}
+
+/// Stored Amazon product names (implemented by
+/// `db::amazon_products::PgAmazonProducts`).
+pub trait AmazonProductRepo: Send + Sync {
+    /// Stores the product, or refreshes the stored one when `product` is at
+    /// least as new; a missing brand keeps the stored brand. Older data is
+    /// ignored without error.
+    fn upsert<'a>(&'a self, product: &'a AmazonProduct) -> PortFuture<'a, Result<(), RepoError>>;
+
+    /// The stored product for `asin`, if any.
+    fn find<'a>(
+        &'a self,
+        asin: &'a Asin,
+    ) -> PortFuture<'a, Result<Option<AmazonProduct>, RepoError>>;
 }
 
 /// Page-access outcome totals (Bright Data fetches).

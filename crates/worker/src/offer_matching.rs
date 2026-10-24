@@ -1,10 +1,12 @@
 //! Matches a fetched retailer offer to an Amazon product and stores the
 //! result: records the price observation, looks the offer up on Amazon
 //! (GTIN first, keywords only when the GTIN finds nothing), scores the
-//! candidates with `matching` and upserts the match.
+//! candidates with `matching`, stores the matched product's Amazon name
+//! (ADR 0017) and upserts the match.
 
 use app::{
-    AmazonSource, AmazonSourceError, CatalogItem, MatchRepo, PriceHistoryRepo, UpsertOutcome,
+    AmazonProduct, AmazonProductRepo, AmazonSource, AmazonSourceError, CatalogItem, CatalogResult,
+    MatchRepo, PriceHistoryRepo, UpsertOutcome,
 };
 use domain::{Offer, ProductMatch, UnixMillis};
 use matching::{Candidate, MatchConfig, match_offer};
@@ -24,7 +26,8 @@ pub enum MatchOutcome {
 /// Why [`match_and_store`] failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum OfferMatchError {
-    /// The observation or the match could not be stored.
+    /// The observation, the product name or the match could not be
+    /// stored.
     #[error("price history or match storage unavailable")]
     Storage,
     /// The Amazon lookup failed.
@@ -62,19 +65,39 @@ pub(crate) fn keyword_query(brand: Option<&str>, title: &str) -> String {
     query
 }
 
-fn candidates(items: Vec<CatalogItem>) -> Vec<Candidate> {
-    items
+fn candidates(result: Option<&CatalogResult>) -> Vec<Candidate> {
+    result
         .into_iter()
-        .map(|i| Candidate {
-            asin: i.asin,
-            title: i.title,
-            brand: i.brand,
+        .flat_map(|r| &r.items)
+        .map(|i: &CatalogItem| Candidate {
+            asin: i.asin.clone(),
+            title: i.title.clone(),
+            brand: i.brand.clone(),
         })
         .collect()
 }
 
+/// The Amazon name of the matched product `found`, from the lookup that
+/// returned it (GTIN hits first); `None` when no item for that ASIN carries
+/// a usable title.
+pub(crate) fn matched_product(
+    found: &ProductMatch,
+    gtin: Option<&CatalogResult>,
+    keyword: Option<&CatalogResult>,
+) -> Option<AmazonProduct> {
+    gtin.into_iter().chain(keyword).find_map(|result| {
+        result
+            .items
+            .iter()
+            .filter(|item| item.asin == found.asin)
+            .find_map(|item| AmazonProduct::from_catalog(item, result.source, result.fetched_at))
+    })
+}
+
 /// Records `offer`'s price, then matches and stores it. The observation is
-/// recorded even when the Amazon lookup fails.
+/// recorded even when the Amazon lookup fails. When a match is found, the
+/// matched product's Amazon name is stored first, so every match written
+/// has a name (the newest lookup wins).
 ///
 /// # Errors
 /// [`OfferMatchError::Storage`] if a write fails;
@@ -82,6 +105,7 @@ fn candidates(items: Vec<CatalogItem>) -> Vec<Candidate> {
 pub async fn match_and_store(
     amazon: &dyn AmazonSource,
     matches: &dyn MatchRepo,
+    products: &dyn AmazonProductRepo,
     prices: &dyn PriceHistoryRepo,
     offer: &Offer,
     config: &MatchConfig,
@@ -92,32 +116,38 @@ pub async fn match_and_store(
         .await
         .map_err(|_| OfferMatchError::Storage)?;
 
-    let gtin_hits = match &offer.gtin {
-        Some(gtin) => candidates(
+    let gtin_result = match &offer.gtin {
+        Some(gtin) => Some(
             amazon
                 .catalog_by_gtin(gtin)
                 .await
-                .map_err(OfferMatchError::Amazon)?
-                .items,
+                .map_err(OfferMatchError::Amazon)?,
         ),
-        None => Vec::new(),
+        None => None,
     };
-    let keyword_hits = if gtin_hits.is_empty() {
+    let gtin_hits = candidates(gtin_result.as_ref());
+    let keyword_result = if gtin_hits.is_empty() {
         let keywords = keyword_query(offer.brand.as_deref(), &offer.title);
-        candidates(
+        Some(
             amazon
                 .catalog_by_keyword(&keywords)
                 .await
-                .map_err(OfferMatchError::Amazon)?
-                .items,
+                .map_err(OfferMatchError::Amazon)?,
         )
     } else {
-        Vec::new()
+        None
     };
+    let keyword_hits = candidates(keyword_result.as_ref());
 
     let Some(found) = match_offer(offer, &gtin_hits, &keyword_hits, config, now) else {
         return Ok(MatchOutcome::NoCandidate);
     };
+    if let Some(product) = matched_product(&found, gtin_result.as_ref(), keyword_result.as_ref()) {
+        products
+            .upsert(&product)
+            .await
+            .map_err(|_| OfferMatchError::Storage)?;
+    }
     let written = matches
         .upsert(&found)
         .await
@@ -133,11 +163,11 @@ mod tests {
     use std::sync::Mutex;
 
     use app::{
-        AmazonDataSource, CatalogResult, FeeEstimate, Fulfillment, OfferSummary, PortFuture,
-        PricePoint, RepoError,
+        AmazonDataSource, FeeEstimate, Fulfillment, OfferSummary, PortFuture, PricePoint, RepoError,
     };
     use domain::{
-        Asin, Availability, Gtin, MatchMethod, MatchStatus, PriceMxn, RetailerId, RetailerSku,
+        Asin, Availability, Confidence, Gtin, MatchMethod, MatchStatus, PriceMxn, RetailerId,
+        RetailerSku,
     };
 
     use super::*;
@@ -250,6 +280,34 @@ mod tests {
         ) -> PortFuture<'a, Result<Vec<(RetailerId, RetailerSku)>, RepoError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
+
+        fn has_any_match<'a>(&'a self, _: &'a Asin) -> PortFuture<'a, Result<bool, RepoError>> {
+            Box::pin(async { Ok(false) })
+        }
+    }
+
+    /// Logs stored product names; fails every write when `fail`.
+    #[derive(Default)]
+    struct FakeProducts {
+        stored: Mutex<Vec<AmazonProduct>>,
+        fail: bool,
+    }
+
+    impl AmazonProductRepo for FakeProducts {
+        fn upsert<'a>(&'a self, p: &'a AmazonProduct) -> PortFuture<'a, Result<(), RepoError>> {
+            if self.fail {
+                return Box::pin(async { Err(RepoError::Unavailable) });
+            }
+            self.stored.lock().unwrap().push(p.clone());
+            Box::pin(async { Ok(()) })
+        }
+
+        fn find<'a>(
+            &'a self,
+            _: &'a Asin,
+        ) -> PortFuture<'a, Result<Option<AmazonProduct>, RepoError>> {
+            Box::pin(async { Ok(None) })
+        }
     }
 
     #[derive(Default)]
@@ -317,10 +375,34 @@ mod tests {
         FakeMatches,
         FakePrices,
     ) {
+        let (out, matches, _, prices) = run_with(amazon, o, answer, FakeProducts::default()).await;
+        (out, matches, prices)
+    }
+
+    async fn run_with(
+        amazon: &FakeAmazon,
+        o: &Offer,
+        answer: UpsertOutcome,
+        products: FakeProducts,
+    ) -> (
+        Result<MatchOutcome, OfferMatchError>,
+        FakeMatches,
+        FakeProducts,
+        FakePrices,
+    ) {
         let matches = FakeMatches::new(answer);
         let prices = FakePrices::default();
-        let out = match_and_store(amazon, &matches, &prices, o, &MatchConfig::default(), NOW).await;
-        (out, matches, prices)
+        let out = match_and_store(
+            amazon,
+            &matches,
+            &products,
+            &prices,
+            o,
+            &MatchConfig::default(),
+            NOW,
+        )
+        .await;
+        (out, matches, products, prices)
     }
 
     fn status(out: &Result<MatchOutcome, OfferMatchError>) -> Option<MatchStatus> {
@@ -444,5 +526,96 @@ mod tests {
         assert_eq!(amazon.calls(), ["gtin:7501055300075"]);
         assert!(matches.upserted.lock().unwrap().is_empty());
         assert_eq!(prices.0.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn matched_product_name_is_stored_with_brand() {
+        let amazon = FakeAmazon::new(
+            Ok(vec![item("B000000001", "  Oster   blender ")]),
+            Ok(vec![]),
+        );
+        let (out, matches, products, _) = run_with(
+            &amazon,
+            &offer(Some("7501055300075")),
+            UpsertOutcome::Written,
+            FakeProducts::default(),
+        )
+        .await;
+        assert_eq!(status(&out), Some(MatchStatus::Accepted));
+        let stored = products.stored.lock().unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].asin.as_str(), "B000000001");
+        assert_eq!(stored[0].title, "Oster blender");
+        assert_eq!(stored[0].brand.as_deref(), Some("Oster"));
+        assert_eq!(stored[0].source, AmazonDataSource::SpApi);
+        assert_eq!(stored[0].seen_at, NOW);
+        assert_eq!(matches.upserted.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn no_candidate_stores_no_name() {
+        let amazon = FakeAmazon::new(Ok(vec![]), Ok(vec![]));
+        let (out, _, products, _) = run_with(
+            &amazon,
+            &offer(None),
+            UpsertOutcome::Written,
+            FakeProducts::default(),
+        )
+        .await;
+        assert_eq!(out, Ok(MatchOutcome::NoCandidate));
+        assert!(products.stored.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn name_storage_error_stops_before_the_match() {
+        let amazon = FakeAmazon::new(Ok(vec![item("B000000001", "Oster blender")]), Ok(vec![]));
+        let failing = FakeProducts {
+            fail: true,
+            ..FakeProducts::default()
+        };
+        let (out, matches, _, _) = run_with(
+            &amazon,
+            &offer(Some("7501055300075")),
+            UpsertOutcome::Written,
+            failing,
+        )
+        .await;
+        assert_eq!(out, Err(OfferMatchError::Storage));
+        assert!(matches.upserted.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn matched_product_prefers_gtin_hits_and_skips_blank_titles() {
+        let found = |asin: &str| ProductMatch {
+            retailer: RetailerId::new("walmart_mx").unwrap(),
+            retailer_sku: RetailerSku::new("123").unwrap(),
+            asin: Asin::new(asin).unwrap(),
+            method: MatchMethod::Gtin,
+            confidence: Confidence::MAX,
+            status: MatchStatus::Accepted,
+            matched_at: NOW,
+        };
+        let result = |items, source| CatalogResult {
+            items,
+            source,
+            fetched_at: NOW,
+        };
+        let gtin = result(
+            vec![item("B000000001", "Por GTIN")],
+            AmazonDataSource::SpApi,
+        );
+        let kw = result(
+            vec![item("B000000001", "Por palabra"), item("B000000002", " ")],
+            AmazonDataSource::BrightData,
+        );
+        let p = matched_product(&found("B000000001"), Some(&gtin), Some(&kw)).unwrap();
+        assert_eq!(p.title, "Por GTIN");
+        let p = matched_product(&found("B000000001"), None, Some(&kw)).unwrap();
+        assert_eq!(
+            (p.title.as_str(), p.source),
+            ("Por palabra", AmazonDataSource::BrightData)
+        );
+        assert!(matched_product(&found("B000000002"), None, Some(&kw)).is_none());
+        assert!(matched_product(&found("B000000003"), Some(&gtin), Some(&kw)).is_none());
     }
 }

@@ -194,6 +194,19 @@ pub async fn accepted_listings(
         .collect()
 }
 
+/// Whether any listing (in any status, `rejected` included) is matched to
+/// `asin`.
+///
+/// # Errors
+///
+/// Database errors; redact before logging.
+pub async fn any_match(pool: &PgPool, asin: &str) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM offer_matches WHERE asin = $1)")
+        .bind(asin)
+        .fetch_one(pool)
+        .await
+}
+
 fn availability_from(name: &str) -> Option<Availability> {
     [
         Availability::InStock,
@@ -310,6 +323,14 @@ impl MatchRepo for PgMatches {
                     ))
                 })
                 .collect()
+        })
+    }
+
+    fn has_any_match<'a>(&'a self, asin: &'a Asin) -> PortFuture<'a, Result<bool, RepoError>> {
+        Box::pin(async move {
+            any_match(&self.0, asin.as_str())
+                .await
+                .map_err(|_| RepoError::Unavailable)
         })
     }
 }

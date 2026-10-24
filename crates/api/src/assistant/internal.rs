@@ -224,6 +224,7 @@ pub struct AgentPriceHistoryResponse {
         (status = OK, description = "Stats and series", body = AgentPriceHistoryResponse),
         (status = BAD_REQUEST, description = "Not a valid ASIN or query", body = ErrorResponse),
         (status = UNAUTHORIZED, description = "`unauthenticated` or `invalid_grant`", body = ErrorResponse),
+        (status = NOT_FOUND, description = "`product_not_found`: the ASIN has no match and no stored name", body = ErrorResponse),
         (status = UNPROCESSABLE_ENTITY, description = "`days` outside 1–365", body = ErrorResponse),
         (status = INTERNAL_SERVER_ERROR, description = "Storage failed", body = ErrorResponse),
         (status = SERVICE_UNAVAILABLE, description = "Not configured", body = ErrorResponse)
@@ -244,23 +245,12 @@ pub(crate) async fn agent_price_history(
         .stats
         .for_product(&user.tenant, &asin, user.memberships)
         .await
-        .map_err(|_| {
-            tracing::warn!("reading price stats failed");
-            ApiError::INTERNAL
-        })?;
+        .map_err(crate::products::stats_error)?;
     let history = inner
         .series
         .for_product(&user.tenant, &asin, days, user.memberships)
         .await
-        .map_err(|e| match e {
-            app::PriceSeriesError::InvalidDays => {
-                ApiError(StatusCode::UNPROCESSABLE_ENTITY, "invalid_days")
-            }
-            app::PriceSeriesError::Storage => {
-                tracing::warn!("reading the price series failed");
-                ApiError::INTERNAL
-            }
-        })?;
+        .map_err(crate::products::series_error)?;
     Ok(Json(AgentPriceHistoryResponse {
         stats: stats.into(),
         history: history.into(),

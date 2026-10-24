@@ -67,10 +67,10 @@ Unit tests fix today at 2026-10-23 and check:
 
 `queue_group_searches` starts one search per catalog group through `app::StartSearch` over `PgSearches`. This is the use case `POST /searches` uses: `searches::create_search` writes the `searches` row and its `search_jobs` message in one transaction. The demo worker then:
 
-- fills `search_results`, `offer_matches`, `price_observations` and `tracked_products`;
-- makes the product pages, the detail panel's history and the assistant's tools return data;
+- fills `search_results`, `offer_matches`, `amazon_products` (the catalog's Amazon titles and brands, ADR 0017), `price_observations` and `tracked_products`;
+- makes the product pages (headed by the Amazon name), the detail panel's history and the assistant's tools return data;
 
-all with no manual search.
+all with no manual search. Until the demo worker has run them, a demo ASIN has no match and no stored name, so its product page shows the not-found state (404 `product_not_found`) rather than an empty history.
 
 Rerun rule: a group is queued again only when the demo account has no search for it in any status other than `failed` or `refused`. A rerun while the earlier searches exist queues nothing. If the kill switch refused them, turn it off and rerun.
 

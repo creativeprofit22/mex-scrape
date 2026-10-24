@@ -137,6 +137,10 @@ jobs:
       - name: Assistant tables tests
         run: cargo test --locked -p db --test assistant -- --ignored
 
+      # Amazon product names seen during matching (migration 0010, ADR 0017).
+      - name: Amazon products tests
+        run: cargo test --locked -p db --test amazon_products -- --ignored
+
       # Worker jobs against Postgres with fake Bright Data and Amazon.
       - name: Worker job tests
         run: cargo test --locked -p worker --test jobs -- --ignored
