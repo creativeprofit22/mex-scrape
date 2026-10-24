@@ -10,6 +10,7 @@ import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { interpolate } from "@/i18n/format";
 import { api, type Schemas } from "@/lib/api/client";
+import { isProductNotFound } from "@/lib/product/name";
 import { errorMessage } from "@/lib/ui";
 import { useRequireOnboarded } from "@/lib/useRequireOnboarded";
 import { useSignInRedirect } from "@/lib/useSignInRedirect";
@@ -25,8 +26,11 @@ type Loaded = {
 };
 
 /**
- * Price history chart (with a table fallback) and 30/90/365-day stats.
- * Users who have not finished onboarding are sent there first.
+ * Price history chart (with a table fallback) and 30/90/365-day stats,
+ * under a header titled with the Amazon name. An ASIN the api doesn't know
+ * (404 `product_not_found`, or 400 `invalid_asin`) gets its own not-found
+ * state with a way back to search; a known product with no prices yet gets
+ * the empty state. Users who have not finished onboarding are sent there first.
  */
 export function PriceHistory({
   asin,
@@ -44,8 +48,9 @@ export function PriceHistory({
   const toSignIn = useSignInRedirect(lang);
   const gate = useRequireOnboarded(lang, common.errors);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  // `final` errors (unknown product) get a way back instead of a retry.
-  const [error, setError] = useState<{ message: string; final: boolean } | null>(null);
+  // Unknown product: its own state with a way back instead of a retry.
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -66,22 +71,20 @@ export function PriceHistory({
         return;
       }
       const failed = history.data ? stats : history;
-      const notFound = failed.response.status === 404 || failed.error?.error === "invalid_asin";
+      if (isProductNotFound(failed.response.status, failed.error?.error)) {
+        setNotFound(true);
+        return;
+      }
       setError(
-        notFound
-          ? { message: dict.notFound, final: true }
-          : {
-              message: interpolate(dict.loadFailed, {
-                reason: errorMessage(failed.response.status, failed.error?.error, common.errors),
-              }),
-              final: false,
-            },
+        interpolate(dict.loadFailed, {
+          reason: errorMessage(failed.response.status, failed.error?.error, common.errors),
+        }),
       );
     });
     return () => {
       active = false;
     };
-  }, [asin, toSignIn, dict.notFound, dict.loadFailed, common.errors, attempt]);
+  }, [asin, toSignIn, dict.loadFailed, common.errors, attempt]);
 
   if (gate.status === "error") {
     return <LoadError message={gate.message} retryLabel={common.retry} onRetry={gate.retry} />;
@@ -89,27 +92,39 @@ export function PriceHistory({
   if (gate.status === "loading") {
     return <p role="status">{common.loading}</p>;
   }
+  if (notFound) {
+    return (
+      <div className="product product--not-found" data-testid="product-not-found">
+        <h1>{dict.notFoundHeading}</h1>
+        <p role="alert" className="product__not-found-text">
+          {interpolate(dict.notFound, { asin })}
+        </p>
+        <p>
+          <Link href={`/${lang}/search`} className="button">
+            {dict.searchCta}
+          </Link>
+        </p>
+      </div>
+    );
+  }
   const empty = loaded !== null && loaded.history.listings.every((l) => l.points.length === 0);
   return (
     <div className="product">
-      <ProductHeader asin={asin} lang={lang} dict={dict} />
+      <ProductHeader
+        asin={asin}
+        title={loaded?.history.title}
+        brand={loaded?.history.brand}
+        lang={lang}
+        dict={dict}
+      />
       {loaded && !error && loaded.history.hidden_listings > 0 ? (
         <p className="hint" data-testid="hidden-listings">
           {interpolate(dict.hidden, { count: loaded.history.hidden_listings })}
         </p>
       ) : null}
-      {error?.final ? (
-        <div className="stack load-error" data-testid="product-not-found">
-          <p role="alert" className="error">
-            {error.message}
-          </p>
-          <p>
-            <Link href={`/${lang}/search`}>{dict.backToSearch}</Link>
-          </p>
-        </div>
-      ) : error ? (
+      {error !== null ? (
         <LoadError
-          message={error.message}
+          message={error}
           retryLabel={common.retry}
           onRetry={() => {
             setError(null);

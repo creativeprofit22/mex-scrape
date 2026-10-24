@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 import { interpolate } from "../src/i18n/format";
 import {
   ASIN,
+  PRODUCT_BRAND,
+  PRODUCT_TITLE,
   catalogs,
   completeSearches,
   expectAccessible,
@@ -90,9 +92,10 @@ for (const lang of ["es", "en"] as const satisfies readonly Lang[]) {
     );
     await page.keyboard.press("Enter");
     await page.waitForURL(`/${lang}/products/${ASIN}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: interpolate(t.product.heading, { asin: ASIN }) }),
-    ).toBeVisible();
+    // The Amazon name the worker stored leads; ASIN and brand are metadata.
+    await expect(page.getByRole("heading", { level: 1, name: PRODUCT_TITLE })).toBeVisible();
+    await expect(page.locator(".product-header__meta")).toContainText(ASIN);
+    await expect(page.getByTestId("product-brand")).toContainText(PRODUCT_BRAND);
     await expect(page.getByRole("img")).toBeVisible();
     // Three seeded listings, each with 30/90/365-day windows.
     await expect(page.getByTestId("price-stats")).toHaveCount(3);

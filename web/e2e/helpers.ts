@@ -28,6 +28,9 @@ export const pendingAccount = {
 
 /** Product with seeded price history and search matches. */
 export const ASIN = "B0E2ETEST1";
+/** Amazon name and brand `seed_e2e` stores for {@link ASIN}. */
+export const PRODUCT_TITLE = "Licuadora de prueba E2E 600 W";
+export const PRODUCT_BRAND = "Marca E2E";
 
 /**
  * Moves focus with Tab until `target` has it (keyboard-only navigation).

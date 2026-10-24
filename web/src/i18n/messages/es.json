@@ -216,13 +216,16 @@
     "windowDays": "{days} días",
     "observations": "Observaciones",
     "empty": "Aún no hay historial para este producto.",
-    "notFound": "No encontramos ese producto. Revisa el ASIN o vuelve a buscar.",
+    "notFound": "Aún no relacionamos el ASIN {asin} con ninguna tienda. Búscalo por nombre para comparar precios.",
     "backToSearch": "Volver a buscar",
     "hidden": "{count} productos de tiendas ocultos porque requieren una membresía que no tienes.",
     "rerunRecent": "Repetir «{query}»",
     "asinLabel": "ASIN",
     "loading": "Cargando el historial de precios…",
-    "loadFailed": "No se pudo cargar el historial de precios. {reason}"
+    "loadFailed": "No se pudo cargar el historial de precios. {reason}",
+    "notFoundHeading": "No encontramos este producto",
+    "searchCta": "Buscar un producto",
+    "brandLabel": "Marca"
   },
   "detail": {
     "empty": "Elige un resultado para ver su detalle: la coincidencia en Amazon, la ganancia y el historial de precios.",
@@ -254,7 +257,8 @@
     "historyLoading": "Cargando historial de precios…",
     "historyEmpty": "Aún no hay precios guardados para este producto.",
     "historyFailed": "No se cargó el historial. {reason}",
-    "fullHistory": "Ver el historial completo"
+    "fullHistory": "Ver el historial completo",
+    "asinOnly": "ASIN {asin}"
   },
   "calculator": {
     "heading": "Calculadora de costos",

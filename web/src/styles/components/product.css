@@ -1,6 +1,6 @@
 /*
- * Product page (docs/modules/web/pages.md): header with the way back and
- * the ASIN, static loading skeleton, and right-aligned stats figures.
+ * Product page (docs/modules/web/pages.md): header with the way back, the
+ * Amazon name and the ASIN, the not-found state, static loading skeleton, and right-aligned stats figures.
  * Tokens only; no motion.
  */
 
@@ -27,26 +27,59 @@
   margin-right: var(--space-1);
 }
 
-.product-header h1 {
+/* Amazon names run long: at most three lines, the full text stays in the DOM. */
+.product-header__title {
+  display: -webkit-box;
   margin-bottom: var(--space-2);
+  overflow: hidden;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
-.product-header__asin {
+/* ASIN and brand: secondary metadata under the title. */
+.product-header__meta {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
   margin: 0;
   color: var(--muted);
 }
 
-.product-header__asin .t-num {
+.product-header__meta > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.product-header__meta dd {
+  margin: 0;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .product__empty {
   max-width: 40rem;
   color: var(--muted);
+}
+
+/* ---------- Not found: own heading, what happened, the way back ---------- */
+
+.product--not-found {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.product--not-found h1,
+.product--not-found p {
+  margin: 0;
+}
+
+.product__not-found-text {
+  max-width: 40rem;
 }
 
 /* ---------- Loading (static; reuses .skeleton from search.css) ---------- */

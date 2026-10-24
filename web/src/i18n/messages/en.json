@@ -216,13 +216,16 @@
     "windowDays": "{days} days",
     "observations": "Observations",
     "empty": "No price history for this product yet.",
-    "notFound": "We could not find that product. Check the ASIN or search again.",
+    "notFound": "We haven't matched ASIN {asin} to any store yet. Search for it by name to compare prices.",
     "backToSearch": "Back to search",
     "hidden": "{count} store listings hidden because they need a membership you do not hold.",
     "rerunRecent": "Rerun “{query}”",
     "asinLabel": "ASIN",
     "loading": "Loading the price history…",
-    "loadFailed": "Could not load the price history. {reason}"
+    "loadFailed": "Could not load the price history. {reason}",
+    "notFoundHeading": "We couldn't find this product",
+    "searchCta": "Search for a product",
+    "brandLabel": "Brand"
   },
   "detail": {
     "empty": "Pick a result to see its details: the Amazon match, the profit and the price history.",
@@ -254,7 +257,8 @@
     "historyLoading": "Loading price history…",
     "historyEmpty": "No prices saved for this product yet.",
     "historyFailed": "The price history didn't load. {reason}",
-    "fullHistory": "View full history"
+    "fullHistory": "View full history",
+    "asinOnly": "ASIN {asin}"
   },
   "calculator": {
     "heading": "Cost calculator",

@@ -32,8 +32,13 @@ const ME = {
 const AS_OF_MS = 1_792_600_000_000;
 const DAY = 86_400_000;
 
+const PRODUCT_TITLE = "Licuadora de prueba 1.5 L, 600 W, vaso de vidrio";
+const PRODUCT_BRAND = "Marca de prueba";
+
 const HISTORY = {
   asin: ASIN,
+  title: PRODUCT_TITLE,
+  brand: PRODUCT_BRAND,
   as_of_ms: AS_OF_MS,
   since_ms: AS_OF_MS - 365 * DAY,
   hidden_listings: 2,
@@ -53,6 +58,8 @@ const HISTORY = {
 
 const STATS = {
   asin: ASIN,
+  title: PRODUCT_TITLE,
+  brand: PRODUCT_BRAND,
   as_of_ms: AS_OF_MS,
   hidden_listings: 2,
   listings: [
@@ -70,13 +77,21 @@ const STATS = {
   ],
 } satisfies Schemas["PriceStatsResponse"];
 
-// What the api sends for a well-formed ASIN with no matched listings.
-const UNKNOWN_HISTORY = {
+// What the api sends for a matched product with no prices yet and no stored name.
+const EMPTY_HISTORY = {
   ...HISTORY,
+  title: null,
+  brand: null,
   hidden_listings: 0,
   listings: [],
 } satisfies Schemas["PriceHistoryResponse"];
-const UNKNOWN_STATS = { ...STATS, hidden_listings: 0, listings: [] } satisfies Schemas["PriceStatsResponse"];
+const EMPTY_STATS = {
+  ...STATS,
+  title: null,
+  brand: null,
+  hidden_listings: 0,
+  listings: [],
+} satisfies Schemas["PriceStatsResponse"];
 
 const SUGGESTIONS = [
   {
@@ -110,8 +125,9 @@ type FakeApi = {
  * Fakes the api. `session`: `in` (onboarded), `pending` (not onboarded) or
  * `out` (401 until a sign-in succeeds). `authError` answers sign-in and
  * sign-up with that error code. `productError` answers the product
- * endpoints with that error; `unknownProduct` answers them as the api does
- * for a well-formed ASIN it has no listings for (200, empty `listings`).
+ * endpoints with that error; `emptyProduct` answers them as the api does
+ * for a matched product with no prices and no stored name (200, empty
+ * `listings`, null `title`).
  */
 async function fakeApi(
   page: Page,
@@ -119,7 +135,7 @@ async function fakeApi(
     session: "in" | "pending" | "out";
     authError?: { status: number; code: string };
     productError?: { status: number; code: string } | null;
-    unknownProduct?: boolean;
+    emptyProduct?: boolean;
   },
 ): Promise<FakeApi> {
   let session = opts.session;
@@ -147,8 +163,8 @@ async function fakeApi(
       if (api.productError !== null) {
         return route.fulfill({ status: api.productError.status, json: { error: api.productError.code } });
       }
-      const history = opts.unknownProduct ? UNKNOWN_HISTORY : HISTORY;
-      const stats = opts.unknownProduct ? UNKNOWN_STATS : STATS;
+      const history = opts.emptyProduct ? EMPTY_HISTORY : HISTORY;
+      const stats = opts.emptyProduct ? EMPTY_STATS : STATS;
       return route.fulfill({ json: path.endsWith("/price-history") ? history : stats });
     }
     if (path === "/roi") {
@@ -344,7 +360,9 @@ test.describe("calculator", () => {
 
 test.describe("product page", () => {
   const p = t.product;
-  const heading = (page: Page) => page.getByRole("heading", { name: interpolate(p.heading, { asin: ASIN }) });
+  const heading = (page: Page) => page.getByRole("heading", { level: 1, name: PRODUCT_TITLE });
+  const fallbackHeading = (page: Page) =>
+    page.getByRole("heading", { level: 1, name: interpolate(p.heading, { asin: ASIN }) });
 
   for (const vp of VIEWPORTS) {
     test(`header leads back to search; stats and the hidden note at ${vp.name}`, async ({ page }) => {
@@ -352,6 +370,9 @@ test.describe("product page", () => {
       await page.setViewportSize(vp.size);
       await page.goto(`/es/products/${ASIN}`);
       await expect(heading(page)).toBeVisible();
+      // The ASIN and brand are metadata under the Amazon name.
+      await expect(page.locator(".product-header__meta")).toContainText(ASIN);
+      await expect(page.getByTestId("product-brand")).toContainText(PRODUCT_BRAND);
       await expect(visible(page.getByTestId("price-stats"))).toBeVisible();
       await expect(visible(page.getByTestId("hidden-listings"))).toHaveText(
         interpolate(p.hidden, { count: 2 }),
@@ -376,10 +397,21 @@ test.describe("product page", () => {
     await expect(rerun).toHaveAttribute("href", /\/es\/search\?.*licuadora/);
   });
 
-  test("an unknown product shows the empty state with the header's link back", async ({ page }) => {
-    await fakeApi(page, { session: "in", unknownProduct: true });
+  test("the English page also leads with the Amazon name", async ({ page }) => {
+    await fakeApi(page, { session: "in" });
+    await page.goto(`/en/products/${ASIN}`);
+    await expect(page.getByRole("heading", { level: 1, name: PRODUCT_TITLE })).toBeVisible();
+    await expect(page.getByTestId("product-brand")).toContainText(catalogs.en.product.brandLabel);
+  });
+
+  test("a known product with no prices and no name shows the empty state under the ASIN heading", async ({
+    page,
+  }) => {
+    await fakeApi(page, { session: "in", emptyProduct: true });
     await page.goto(`/es/products/${ASIN}`);
     await expect(visible(page.getByTestId("product-empty"))).toHaveText(p.empty);
+    await expect(fallbackHeading(page)).toBeVisible();
+    await expect(page.getByTestId("product-brand")).toHaveCount(0);
     await expect(page.getByTestId("product-not-found")).toHaveCount(0);
     await expect(page.getByTestId("hidden-listings")).toHaveCount(0);
     await expectAccessible(page);
@@ -387,15 +419,25 @@ test.describe("product page", () => {
     await page.waitForURL(/\/es\/search$/);
   });
 
-  test("an ASIN the api rejects keeps a link back to search", async ({ page }) => {
-    await fakeApi(page, { session: "in", productError: { status: 400, code: "invalid_asin" } });
-    await page.goto(`/es/products/${ASIN}`);
-    const notFound = visible(page.getByTestId("product-not-found"));
-    await expect(notFound.getByRole("alert")).toHaveText(p.notFound);
-    await expect(notFound.getByRole("link", { name: p.backToSearch })).toHaveAttribute("href", "/es/search");
-    await expect(page.getByRole("button", { name: t.common.retry })).toHaveCount(0);
-    await expectAccessible(page);
-  });
+  for (const error of [
+    { status: 404, code: "product_not_found" },
+    { status: 400, code: "invalid_asin" },
+  ]) {
+    test(`an unknown product (${error.status} ${error.code}) shows not found with a way back to search`, async ({
+      page,
+    }) => {
+      await fakeApi(page, { session: "in", productError: error });
+      await page.goto(`/es/products/${ASIN}`);
+      const notFound = visible(page.getByTestId("product-not-found"));
+      await expect(notFound.getByRole("heading", { level: 1, name: p.notFoundHeading })).toBeVisible();
+      await expect(notFound.getByRole("alert")).toHaveText(interpolate(p.notFound, { asin: ASIN }));
+      await expect(notFound.getByRole("link", { name: p.searchCta })).toHaveAttribute("href", "/es/search");
+      await expect(page.getByRole("button", { name: t.common.retry })).toHaveCount(0);
+      await expect(page.getByTestId("product-empty")).toHaveCount(0);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      await expectAccessible(page);
+    });
+  }
 
   test("a failed load offers Reintentar, which recovers", async ({ page }) => {
     const api = await fakeApi(page, { session: "in", productError: { status: 500, code: "internal" } });

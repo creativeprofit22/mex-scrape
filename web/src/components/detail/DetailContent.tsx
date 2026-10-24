@@ -9,6 +9,7 @@ import type { Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { formatMoney, interpolate } from "@/i18n/format";
 import { api } from "@/lib/api/client";
+import { productTitle } from "@/lib/product/name";
 import type { MatchDecision, Row } from "@/lib/search/rows";
 import type { Costs } from "@/lib/search/storage";
 import { errorMessage, retailerName } from "@/lib/ui";
@@ -34,7 +35,8 @@ export type DetailDicts = {
 const CHART_HEIGHT = 200;
 
 /**
- * The selected result: store, title, link, the match with its confidence
+ * The selected result: store, title, link, the match (Amazon name, with
+ * "ASIN …" until it loads or when none is stored) with its confidence
  * and Confirmar / Descartar, the profit breakdown and the 90-day chart.
  * Keyed by the row, so a new selection starts with fresh request state.
  */
@@ -63,6 +65,8 @@ export function DetailContent({
   const amazon = result.amazon ?? null;
   const store = retailerName(result.retailer, retailers);
   const { history, retry } = useDetailHistory(amazon?.asin ?? null, toSignIn, common.errors);
+  const asinOnly = amazon ? interpolate(detail.asinOnly, { asin: amazon.asin }) : "";
+  const amazonName = history.status === "ready" ? productTitle(history.history.title, asinOnly) : asinOnly;
 
   const [saving, setSaving] = useState<MatchDecision | null>(null);
   const [failed, setFailed] = useState<{ decision: MatchDecision; message: string } | null>(null);
@@ -160,6 +164,10 @@ export function DetailContent({
             <h3 id="detail-match-heading" className="detail__heading">
               {detail.matchHeading}
             </h3>
+            <p className="detail__amazon" data-testid="detail-amazon-name">
+              <span className="detail__amazon-name">{amazonName}</span>
+              {amazonName !== asinOnly ? <span className="detail__amazon-asin t-num">{asinOnly}</span> : null}
+            </p>
             <MatchMeter
               confidenceBp={amazon.confidence_bp}
               lang={lang}

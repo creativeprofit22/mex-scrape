@@ -39,7 +39,8 @@ Not gated on onboarding: it needs no memberships.
 - `ProductHeader` has:
   - a "Volver a buscar" link to `/[lang]/search`, where the kept-mounted search still shows its results;
   - when this browser has a recent search, a "Repetir «{query}»" link (`rerunHref`, `?q=`);
-  - the h1 with the ASIN, and the ASIN again as a label in tabular figures.
+  - the h1 with the Amazon product name (`title` from the history reply, ADR 0017), clamped to three lines with the full text kept in the DOM; while loading, or when no name is stored, it falls back to "Historial de precios de {asin}" (`productTitle` in `src/lib/product/name.ts`);
+  - a `.product-header__meta` `<dl>` with the ASIN in tabular figures and, when known, the brand (`data-testid="product-brand"`).
 - The chart is the shared `PriceChart` plus the `PriceTable` disclosure, 365 days ([detail-panel](detail-panel.md#chart)).
 - `PriceStatsTable` shows one `.stats-table` per listing (30/90/365-day low, high and average, plus observations). Figures are tabular and right-aligned, with row headers on the left. It keeps `data-testid="price-stats"`.
 - **States**:
@@ -47,9 +48,9 @@ Not gated on onboarding: it needs no memberships.
 | State | What shows |
 | --- | --- |
 | loading | a static chart skeleton (`aria-hidden`, no shimmer) and a `role="status"` line, `aria-busy` on the section |
-| empty | "Aún no hay historial para este producto." (`data-testid="product-empty"`); also what an unknown ASIN shows, since the api answers it with 200 and empty `listings` (the header keeps its link back) |
+| empty | "Aún no hay historial para este producto." (`data-testid="product-empty"`): a known ASIN (200) with no listings; the header keeps its link back |
 | hidden listings | "{count} productos de tiendas ocultos…" when `hidden_listings > 0` (`data-testid="hidden-listings"`) |
-| not found (400 `invalid_asin`) | an alert plus the link back to search (`data-testid="product-not-found"`); the route's own `^[A-Z0-9]{10}$` check normally stops a malformed ASIN first, so this is a fallback (the branch also accepts a 404, which the api does not send) |
+| not found (404 `product_not_found`, or 400 `invalid_asin`) | its own page, replacing header and chart (`data-testid="product-not-found"`): h1 "No encontramos este producto", a `role="alert"` line naming the ASIN and telling the user to search by name, and a primary "Buscar un producto" link to `/[lang]/search`; no Reintentar and never the empty copy (`isProductNotFound` in `src/lib/product/name.ts`). The route's `^[A-Z0-9]{10}$` check normally stops a malformed ASIN first |
 | error | `LoadError` with Reintentar, which reloads both requests |
 | 401 | sign-in |
 
@@ -84,9 +85,10 @@ Not gated on onboarding: it needs no memberships.
 
 - `e2e/pages.spec.ts` fakes `/backend/**` with `page.route` (no backend) and runs at 1440×900 and 390×844 with axe on each page:
   - **calculator**: columns at 1440, stacked at 390; the result stays put while the inputs scroll; gain vs loss tone; `aria-invalid` with a described error; the prefill from the saved costs.
-  - **product**: the back link, the rerun link only with a recent search, stats and the hidden note; an unknown ASIN (200, empty `listings`) shows the empty state and the header's link back; a 400 `invalid_asin` shows not-found with the link back; Reintentar recovers.
+  - **product**: the back link, the rerun link only with a recent search, stats and the hidden note; the Amazon name as the h1 and the brand in /es and /en; a known ASIN with empty `listings` shows the empty state under the ASIN heading; a mocked 404 `product_not_found` and a 400 `invalid_asin` show the not-found state (heading, ASIN, search link, no Reintentar, no empty copy); Reintentar recovers.
   - **assistant**: the composer stays in view after six messages; the cards sit in the log; Descartar sends 0 `/matches/decisions` requests and Confirmar sends 1.
   - **auth**: `weak_password` marks the password, and its `aria-describedby` names the hint and the error; `invalid_credentials` marks no field.
   - **onboarding**: rows of at least 44px on touch, with native checkboxes.
   - **home**: three steps and no service status when signed out; signed in → search (Back skips home); not onboarded → onboarding; after saving onboarding, the wordmark leads home and on to search, not back to onboarding.
-- Still covering these pages against the seeded backend: `recovery.spec.ts` (calculator draft through sign-in, `?next=`), `journey.spec.ts` (product page, calculator ROI) and `assistant.spec.ts`.
+- `e2e/product-helpers.spec.ts` (Node only): `productTitle` fallbacks and `isProductNotFound`.
+- Still covering these pages against the seeded backend: `recovery.spec.ts` (calculator draft through sign-in, `?next=`), `journey.spec.ts` (product page with the seeded Amazon name and brand, calculator ROI) and `assistant.spec.ts`.

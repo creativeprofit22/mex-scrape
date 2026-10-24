@@ -2,7 +2,7 @@
 
 Picking a result on the search page opens its details without leaving the list: the store offer, the Amazon match with Confirmar / Descartar, the profit breakdown and a 90-day price chart. The chart is a shared module that the product page (`/[lang]/products/[asin]`) also uses. Styles: `src/styles/components/detail.css` and `chart.css`; the visual reasons live in `web/.gg/style-pack.md` §1a, §3 and §10.1.
 
-No API changes: `GET /products/{asin}/price-history?days=90`, `POST /matches/decisions`, and the profit already fetched by the search page from `POST /roi`.
+API used: `GET /products/{asin}/price-history?days=90` (also the source of the Amazon name, ADR 0017), `POST /matches/decisions`, and the profit already fetched by the search page from `POST /roi`.
 
 ## Shells (`src/components/detail/`)
 
@@ -31,6 +31,7 @@ Closing clears `selectedKey` and moves focus back to the row's visible title but
 1. The store name and the title (display face, the panel's heading). The × button is labelled "Cerrar el detalle".
 2. The store price and a store link (`target="_blank" rel="noopener noreferrer"`). Its accessible name says it opens a new tab.
 3. **Coincidencia en Amazon** (match only), with three parts:
+   - The Amazon name (`data-testid="detail-amazon-name"`, `.detail__amazon`) from the history reply's `title`, with "ASIN {asin}" after it as metadata; while the history loads, when it fails, or when no name is stored, only "ASIN {asin}" shows.
    - `MatchMeter`: a native `<meter min=0 max=10000>` for `confidence_bp`, named "Confianza de la coincidencia: 82 %". The visible label and value are `aria-hidden` so they aren't read twice.
    - **Confirmar coincidencia** and **Descartar coincidencia** while the match needs review. Once it is accepted, a "Coincidencia confirmada" tag shows instead.
    - After a decision is saved, focus moves to the outcome line (`role="status"`), so keyboard users keep their place.
@@ -130,7 +131,7 @@ The results container (`.results`, `container: results / inline-size`) shows the
   - Band edge cases.
 - `e2e/search-helpers.spec.ts`: `applyDecisions` (accept, reject, no verdict, no match).
 - `e2e/search.spec.ts`, against a mocked `/backend/**`:
-  - At 1440: match, meter, profit and chart; Confirmar updating the badge and reloading the chart; Descartar removing the match and profit; loading, history error with retry, empty history and no match; a decision error with retry.
+  - At 1440: match, Amazon name with its ASIN, meter, profit and chart; the ASIN-only fallback when no name is stored; Confirmar updating the badge and reloading the chart; Descartar removing the match and profit; loading, history error with retry, empty history and no match; a decision error with retry.
   - At 1024 (side sheet) and 390 (bottom sheet): modal semantics; Esc, × and the backdrop closing it; focus returning to the row; Confirmar from the sheet.
   - Results switching to cards beside the panel.
   - Crossing 1200px while open.

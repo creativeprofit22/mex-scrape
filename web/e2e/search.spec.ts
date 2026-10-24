@@ -192,6 +192,13 @@ type FakeApi = {
 const AS_OF_MS = 1_792_600_000_000;
 const DAY = 86_400_000;
 
+/** Amazon names the api stored per ASIN; Beta's product has none yet. */
+const AMAZON_TITLES: Readonly<Record<string, string>> = {
+  B0SYNALFA1: "Licuadora Alfa de Amazon, 1.5 L",
+  B0SYNGAMA1: "Cafetera Gamma de Amazon, 12 tazas",
+  B0SYNEPSI1: "Tostador Épsilon de Amazon, 4 rebanadas",
+};
+
 /** Ten days of prices for the panel's chart; Beta's product has none yet. */
 function history(asin: string): Schemas["PriceHistoryResponse"] {
   const listing = RESULTS.find((r) => r.amazon?.asin === asin);
@@ -206,6 +213,8 @@ function history(asin: string): Schemas["PriceHistoryResponse"] {
         }));
   return {
     asin,
+    title: AMAZON_TITLES[asin] ?? null,
+    brand: null,
     as_of_ms: AS_OF_MS,
     since_ms: AS_OF_MS - 90 * DAY,
     hidden_listings: 0,
@@ -814,6 +823,10 @@ test.describe("detail panel, inline at 1440", () => {
       name: interpolate(d.confidenceValue, { value: formatBasisPoints(6_100, "es") }),
     });
     await expect(meter).toHaveAttribute("value", "6100");
+    // The Amazon name sits next to the meter, with the ASIN as metadata.
+    const amazonName = aside.getByTestId("detail-amazon-name");
+    await expect(amazonName).toContainText("Cafetera Gamma de Amazon, 12 tazas");
+    await expect(amazonName).toContainText(interpolate(d.asinOnly, { asin: "B0SYNGAMA1" }));
     await expect(aside.getByTestId("detail-profit")).toHaveText(s.sign.plus + formatMoney(18_000, "es"));
     // Costs carry a minus; the unsaved (zero) prep has none.
     const breakdown = aside.locator(".breakdown");
@@ -930,6 +943,10 @@ test.describe("detail panel, inline at 1440", () => {
     await openRow(page, "Batidora Beta");
     await expect(panel(page).getByTestId("history-empty")).toHaveText(d.historyEmpty);
     await expect(panel(page).getByTestId("hidden-listings")).toHaveCount(0);
+    // No Amazon name stored: the ASIN stands in.
+    await expect(panel(page).getByTestId("detail-amazon-name")).toHaveText(
+      interpolate(d.asinOnly, { asin: "B0SYNBETA1" }),
+    );
 
     await openRow(page, "Hervidor Delta");
     await expect(panel(page).getByTestId("detail-no-match")).toHaveText(d.noMatch);
