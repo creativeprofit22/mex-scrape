@@ -46,7 +46,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-login",
- "base64 0.22.1",
+ "base64 0.23.1",
  "db",
  "domain",
  "governor",
@@ -1129,7 +1129,7 @@ dependencies = [
 name = "http-guard"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "futures-util",
  "http-guard",
  "reqwest",
