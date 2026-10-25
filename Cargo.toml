@@ -35,7 +35,7 @@ hmac = "=0.13.0"
 password-auth = "=1.0.0"
 subtle = "2.6.1"
 time = "0.3.55"
-tower-sessions = { version = "=0.14.0", default-features = false, features = ["axum-core"] }
+tower-sessions = { version = "=0.15.0", default-features = false, features = ["axum-core"] }
 tower_governor = { version = "=0.8.0", default-features = false, features = ["axum"] }
 base64 = "0.22.1"
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
