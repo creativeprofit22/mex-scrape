@@ -37,7 +37,7 @@ subtle = "2.6.1"
 time = "0.3.55"
 tower-sessions = { version = "=0.14.0", default-features = false, features = ["axum-core"] }
 tower_governor = { version = "=0.8.0", default-features = false, features = ["axum"] }
-base64 = "0.22.1"
+base64 = "0.23.1"
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 croner = "4.0.1"
 futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
